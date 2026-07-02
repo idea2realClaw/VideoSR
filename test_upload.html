@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VideoSR - 上传测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h2 {
+            color: #333;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>VideoSR 上传功能测试</h1>
+    
+    <div class="test-section">
+        <h2>1. 健康检查</h2>
+        <button onclick="testHealth()">测试服务器连接</button>
+        <div id="healthLog" class="log"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. 文件上传测试</h2>
+        <input type="file" id="testFileInput" accept="video/*">
+        <button onclick="testUpload()">测试上传</button>
+        <div id="uploadLog" class="log"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. 控制台日志</h2>
+        <p>打开浏览器控制台 (F12) 查看详细日志</p>
+        <button onclick="clearLogs()">清除日志</button>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://localhost:5000';
+        
+        function log(elementId, message, type = 'info') {
+            const logDiv = document.getElementById(elementId);
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            entry.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log('[' + type + ']', message);
+        }
+        
+        async function testHealth() {
+            log('healthLog', 'Testing health endpoint...', 'info');
+            try {
+                const response = await fetch(API_BASE + '/api/health');
+                const result = await response.json();
+                log('healthLog', 'Health check successful: ' + JSON.stringify(result), 'success');
+            } catch (error) {
+                log('healthLog', 'Health check failed: ' + error.message, 'error');
+            }
+        }
+        
+        async function testUpload() {
+            const fileInput = document.getElementById('testFileInput');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                log('uploadLog', 'Please select a file first', 'error');
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            log('uploadLog', 'Selected file: ' + file.name + ' (' + file.size + ' bytes)', 'info');
+            log('uploadLog', 'File type: ' + file.type, 'info');
+            
+            const formData = new FormData();
+            formData.append('video', file);
+            
+            log('uploadLog', 'Uploading to ' + API_BASE + '/api/upload...', 'info');
+            
+            try {
+                const response = await fetch(API_BASE + '/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                log('uploadLog', 'Response status: ' + response.status, 'info');
+                
+                const responseText = await response.text();
+                log('uploadLog', 'Response text: ' + responseText, 'info');
+                
+                const result = JSON.parse(responseText);
+                
+                if (result.success) {
+                    log('uploadLog', 'Upload successful! filePath: ' + result.filePath, 'success');
+                } else {
+                    log('uploadLog', 'Upload failed: ' + result.message, 'error');
+                }
+            } catch (error) {
+                log('uploadLog', 'Upload error: ' + error.message, 'error');
+            }
+        }
+        
+        function clearLogs() {
+            document.querySelectorAll('.log').forEach(function(log) {
+                log.innerHTML = '';
+            });
+        }
+        
+        // Auto-test health on load
+        window.addEventListener('load', function() {
+            log('healthLog', 'Page loaded, testing connection...', 'info');
+            testHealth();
+        });
+    </script>
+</body>
+</html>
