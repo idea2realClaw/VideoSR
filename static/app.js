@@ -781,7 +781,7 @@ function updateProgress(task) {
 }
 
 function showCompletion(task) {
-    console.log('Showing completion');
+    console.log('Showing completion', task);
     
     if (Elements.progressSection) {
         Elements.progressSection.style.display = 'none';
@@ -791,7 +791,11 @@ function showCompletion(task) {
     }
     
     const outputPath = task.outputPath || '';
-    const fileName = outputPath.split('/').pop() || 'output';
+    const fileName = outputPath.split('/').pop().split('\').pop() || 'output';
+    const fileUrl = API_BASE + '/outputs/' + fileName;
+    
+    console.log('Output file:', fileName);
+    console.log('File URL:', fileUrl);
     
     if (Elements.completeInfo) {
         let infoHtml = `增强${AppState.mode === 'video' ? '视频' : '图片'}已生成：<strong>${fileName}</strong><br>`;
@@ -801,20 +805,24 @@ function showCompletion(task) {
     }
     
     if (AppState.mode === 'video') {
-        // 显示结果视频
-        const resultUrl = API_BASE + '/api/download/' + task.taskId;
+        // 显示结果视频（使用预览URL）
         if (Elements.resultVideo) {
-            Elements.resultVideo.src = resultUrl;
+            Elements.resultVideo.src = fileUrl;
             Elements.resultVideo.style.display = 'block';
         }
         if (Elements.videoResultPlaceholder) {
             Elements.videoResultPlaceholder.style.display = 'none';
         }
     } else {
-        // 显示结果图片
-        const resultUrl = API_BASE + '/api/download/' + task.taskId;
+        // 显示结果图片（使用预览URL）
         if (Elements.resultImage) {
-            Elements.resultImage.src = resultUrl;
+            Elements.resultImage.src = fileUrl;
+            Elements.resultImage.onload = function() {
+                console.log('Result image loaded successfully');
+            };
+            Elements.resultImage.onerror = function() {
+                console.error('Failed to load result image:', fileUrl);
+            };
             Elements.resultImageWrapper.style.display = 'block';
         }
         if (Elements.imageResultPlaceholder) {
@@ -822,7 +830,7 @@ function showCompletion(task) {
         }
     }
     
-    AppState.completedTaskId = task.taskId;
+    AppState.completedTaskId = task.id;
     
     // 更新下载按钮文本
     if (Elements.downloadBtnText) {

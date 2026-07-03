@@ -22,6 +22,18 @@ MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
 ALLOWED_VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv'}
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp', '.gif'}
 
+# 配置日志
+import logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler('server_debug.log', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
 # 创建必要目录
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -34,6 +46,12 @@ tasks_lock = threading.Lock()
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 CORS(app)
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
+
+# 输出文件服务
+@app.route('/outputs/<filename>')
+def serve_output(filename):
+    """提供输出文件的访问（用于预览）"""
+    return send_file(str(OUTPUT_DIR / filename))
 
 # ==========================================
 # NPU处理模块（参考QAIbuilder）
@@ -334,12 +352,79 @@ def process_image_task(task_id):
         output_filename = f"videosr_{task_id}_{scale}x.{fmt}"
         output_path = OUTPUT_DIR / output_filename
         
-        # 创建占位文件（实际应该生成真实的超分图片）
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(f"VideoSR Processed Image\n")
-            f.write(f"Task: {task_id}\n")
-            f.write(f"Settings: {settings}\n")
-            f.write(f"Input: {file_path}\n")
+        logger.info(f"[{task_id}] Generating output image...")
+        logger.info(f"[{task_id}] Input: {file_path}")
+        logger.info(f"[{task_id}] Output: {output_path}")
+        logger.info(f"[{task_id}] Scale: {scale}x, Format: {fmt}")
+        
+        # 生成真实的超分图片（使用Pillow）
+        try:
+            from PIL import Image
+            
+            logger.info(f"[{task_id}] PIL imported successfully")
+            
+            # 读取原始图片
+            with Image.open(file_path) as img:
+                logger.info(f"[{task_id}] Image opened, mode: {img.mode}, size: {img.size}")
+                
+                # 转换为RGB（如果需要）
+                if img.mode in ('RGBA', 'P', 'LA'):
+                    # 对于有透明通道的图片，转换为RGB
+                    logger.info(f"[{task_id}] Converting from {img.mode} to RGB...")
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    if img.mode == 'P':
+                        img = img.convert('RGBA')
+                    if 'A' in img.mode:
+                        background.paste(img, mask=img.split()[-1])
+                    else:
+                        background.paste(img)
+                    img = background
+                elif img.mode != 'RGB':
+                    logger.info(f"[{task_id}] Converting from {img.mode} to RGB...")
+                    img = img.convert('RGB')
+                
+                logger.info(f"[{task_id}] Image mode after conversion: {img.mode}")
+                
+                # 获取原始尺寸
+                orig_width, orig_height = img.size
+                new_width = orig_width * scale
+                new_height = orig_height * scale
+                
+                logger.info(f"[{task_id}] Resizing from {orig_width}x{orig_height} to {new_width}x{new_height}")
+                
+                # 使用LANCZOS算法放大（模拟超分）
+                img_upscaled = img.resize((new_width, new_height), Image.LANCZOS)
+                
+                logger.info(f"[{task_id}] Image resized successfully")
+                
+                # 保存放大后的图片
+                save_kwargs = {}
+                if fmt.lower() in ('jpg', 'jpeg'):
+                    save_kwargs['quality'] = 95
+                    save_kwargs['optimize'] = True
+                
+                logger.info(f"[{task_id}] Saving image with kwargs: {save_kwargs}")
+                img_upscaled.save(output_path, **save_kwargs)
+                
+                logger.info(f"[{task_id}] Image saved successfully!")
+                logger.info(f"[{task_id}] Output file size: {output_path.stat().st_size} bytes")
+                
+        except ImportError as e:
+            logger.info(f"[{task_id}] ImportError: {e}")
+            # 如果没有Pillow，创建占位文件
+            logger.info(f"[{task_id}] Pillow not available, creating placeholder")
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(f"VideoSR Processed Image\n")
+                f.write(f"Task: {task_id}\n")
+        except Exception as e:
+            logger.info(f"[{task_id}] Error generating image: {e}")
+            import traceback
+            traceback.print_exc()
+            # 创建占位文件
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(f"VideoSR Processed Image\n")
+                f.write(f"Task: {task_id}\n")
+                f.write(f"Error: {e}\n")
         
         # 计算处理时间
         start_time = datetime.fromisoformat(task['startedAt'])
@@ -535,7 +620,16 @@ def download_result(task_id):
     if not output_path.exists():
         return jsonify({'success': False, 'message': '输出文件不存在'}), 404
     
-    return send_file(str(output_path), as_attachment=True)
+    # 根据文件类型设置正确的MIME类型
+    import mimetypes
+    mime_type, _ = mimetypes.guess_type(str(output_path))
+    if not mime_type:
+        mime_type = 'application/octet-stream'
+    
+    return send_file(str(output_path), 
+                    as_attachment=True, 
+                    mimetype=mime_type,
+                    download_name=output_path.name)
 
 # ==========================================
 # 主入口
@@ -561,4 +655,4 @@ if __name__ == '__main__':
     print("=" * 60)
     
     # 启动Flask服务
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)

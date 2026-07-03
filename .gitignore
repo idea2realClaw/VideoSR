@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
 *.so
 .Python
 venv/
@@ -10,14 +11,17 @@ ENV/
 dist/
 build/
 
-# Flask
-instance/
-.webassets-cache
-*.log
+# 测试文件
+test_*.py
+test_*.jpg
+test_*.png
+test_*.mp4
+direct_test.py
+nul
+*.txt
 
-# 上传和输出文件
-uploads/
-outputs/
+# 日志文件
+*.log
 
 # IDE
 .vscode/
@@ -25,10 +29,11 @@ outputs/
 *.swp
 *.swo
 
+# 临时文件
+outputs/*
+!outputs/.gitkeep
+
 # OS
 Thumbs.db
 Desktop.ini
 .DS_Store
-
-# 项目文件
-.workbuddy/
