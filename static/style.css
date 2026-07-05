@@ -1648,78 +1648,62 @@ body {
 }
 
 /* ==========================================
-   图片/视频对比滑动条
+   图片/视频对比滑动条（新逻辑）
    ========================================== */
 .compare-container {
     position: relative;
     width: 100%;
     min-height: 200px;
-    max-height: 500px;
     overflow: hidden;
     border-radius: var(--radius-md);
     background: var(--bg-tertiary);
     user-select: none;
 }
 
-.compare-original {
-    position: relative;
-    width: 100%;
-    height: auto;
-    z-index: 1;
+/* 图片模式下：无外框，背景透明，容器撑大 */
+.image-preview-section.compare-mode {
+    background: none;
+    border: none;
+    padding: 0;
 }
 
-.compare-original img,
-.compare-original video {
-    width: 100%;
-    height: auto;
-    max-height: 500px;
-    object-fit: contain;
-    display: block;
-}
-
-/* 对比模式激活后的样式 */
-.compare-container.comparing .compare-original {
+/* 两层图片/视频完全重叠 */
+.compare-original,
+.compare-result {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    overflow: hidden;
 }
 
-.compare-container.comparing .compare-original img,
-.compare-container.comparing .compare-original video {
+.compare-original img,
+.compare-original video,
+.compare-result img,
+.compare-result video {
     width: 100%;
     height: 100%;
     object-fit: contain;
     display: block;
 }
 
-.compare-result {
-    display: none;
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 50%;
-    height: 100%;
-    overflow: hidden;
+/* 默认：仅显示原图层 */
+.compare-original {
     z-index: 2;
-    border-left: 2px solid rgba(255,255,255,0.7);
 }
 
-.compare-container.comparing .compare-result {
-    display: block;
+/* 结果图层在下面 */
+.compare-result {
+    z-index: 1;
 }
 
-.compare-result img,
-.compare-result video {
-    width: auto;
-    height: 100%;
-    min-width: 100%;
-    object-fit: contain;
-    display: block;
+/* 激活对比模式后，原图层按滑块位置裁剪（右側透明） */
+.compare-container.comparing .compare-original {
+    /* clip-path 由 JS 动态设置 */
+    transition: clip-path 0.05s;
 }
 
+/* 滑块 */
 .compare-slider {
     display: none;
     position: absolute;
@@ -1733,6 +1717,7 @@ body {
     align-items: center;
     justify-content: center;
     cursor: ew-resize;
+    pointer-events: auto;
 }
 
 .compare-container.comparing .compare-slider {
@@ -1757,8 +1742,10 @@ body {
     font-size: 14px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     z-index: 11;
+    pointer-events: none;
 }
 
+/* 标签 */
 .compare-label {
     position: absolute;
     top: 12px;
@@ -1812,4 +1799,11 @@ body {
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
     font-size: 0.85rem;
     line-height: 1.6;
+}
+
+/* 图片预览区：无外框，背景透明 */
+#imagePreviewSection {
+    background: none;
+    border: none;
+    padding: 0;
 }

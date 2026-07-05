@@ -1349,45 +1349,52 @@ var compareSliders = {};
 
 function initCompareSlider(type) {
     // type: 'image' or 'video'
+    // 新逻辑：原图在上层，超分图在下层，完全重叠
+    // 滑块右側的上层变透明（clip-path 裁剪），露出下层
     var container = document.getElementById(type + 'CompareContainer');
     var slider = document.getElementById(type + 'CompareSlider');
+    var originalDiv = container ? container.querySelector('.compare-original') : null;
     var resultDiv = document.getElementById(type + 'CompareResult');
-    
-    if (!container || !slider || !resultDiv) {
+
+    if (!container || !slider || !originalDiv) {
         console.warn('Compare slider elements not found for type:', type);
         return;
     }
-    
+
+    // 激活对比模式：添加 class，确保结果图显示
+    container.classList.add('comparing');
+    if (resultDiv) resultDiv.style.display = 'block';
+
     // 等待容器渲染完成后再计算宽度
-    function setSliderPosition() {
+    function setSliderToCenter() {
         var rect = container.getBoundingClientRect();
         var containerWidth = rect.width;
         if (containerWidth === 0) {
-            // 如果容器还没渲染，等待一帧再试
-            requestAnimationFrame(setSliderPosition);
+            requestAnimationFrame(setSliderToCenter);
             return;
         }
-        var initialLeft = containerWidth / 2;
-        slider.style.left = initialLeft + 'px';
-        resultDiv.style.width = (containerWidth - initialLeft) + 'px';
+        var centerX = containerWidth / 2;
+        slider.style.left = centerX + 'px';
+        // 用 clip-path 裁切原图右側（右侧透明）
+        originalDiv.style.clipPath = 'inset(0 ' + (containerWidth - centerX) + 'px 0 0)';
         console.log('Compare slider initialized:', type, 'width:', containerWidth);
     }
-    
-    requestAnimationFrame(setSliderPosition);
-    
+
+    requestAnimationFrame(setSliderToCenter);
+
     // 如果已经初始化过，不再重复绑定
     if (compareSliders[type]) return;
-    
+
     compareSliders[type] = true;
-    
+
     var isDragging = false;
-    
+
     function onDragStart(e) {
         isDragging = true;
         e.preventDefault();
         sendBackendLog('event', 'compare drag start: ' + type, 'compare');
     }
-    
+
     function onDragMove(e) {
         if (!isDragging) return;
         var clientX;
@@ -1396,29 +1403,30 @@ function initCompareSlider(type) {
         } else {
             clientX = e.clientX;
         }
-        
+
         var rect = container.getBoundingClientRect();
         var x = clientX - rect.left;
         x = Math.max(20, Math.min(x, rect.width - 20));
-        
+
         slider.style.left = x + 'px';
-        resultDiv.style.width = (rect.width - x) + 'px';
+        // 裁切原图：右侧 (rect.width - x) 的部分变透明
+        originalDiv.style.clipPath = 'inset(0 ' + (rect.width - x) + 'px 0 0)';
     }
-    
+
     function onDragEnd() {
         isDragging = false;
     }
-    
+
     // 鼠标事件
     slider.addEventListener('mousedown', onDragStart);
     document.addEventListener('mousemove', onDragMove);
     document.addEventListener('mouseup', onDragEnd);
-    
+
     // 触摸事件
     slider.addEventListener('touchstart', onDragStart, {passive: false});
     document.addEventListener('touchmove', onDragMove, {passive: false});
     document.addEventListener('touchend', onDragEnd);
-    
+
     console.log('Compare slider initialized for:', type);
     sendBackendLog('info', 'Compare slider initialized: ' + type, 'compare');
 }
