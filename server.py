@@ -416,8 +416,8 @@ def process_image_task(task_id):
             
             update_task(task_id, status='postprocessing', progress=90)
             
-            # 保存输出文件
-            fmt = settings.get('format', 'png')
+            # 保存输出文件（强制 JPG 格式）
+            fmt = 'jpg'
             output_filename = f"videosr_{task_id}_{scale}x.{fmt}"
             output_path = OUTPUT_DIR / output_filename
             
