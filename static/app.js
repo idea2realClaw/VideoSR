@@ -689,6 +689,11 @@ function showPreview(file, uploadResult) {
             if (origInfo) {
                 origInfo.innerHTML = '<div>文件名: ' + file.name + '</div><div>文件大小: ' + fileSize + '</div><div>尺寸: ' + img.width + ' × ' + img.height + ' 像素</div>';
             }
+            // 打印原图实际像素和容器大小
+            var container = document.getElementById('imageCompareContainer');
+            var cw = container ? container.offsetWidth : 0, ch = container ? container.offsetHeight : 0;
+            console.log('[ORIG IMAGE] naturalSize:', img.width, 'x', img.height, '| containerSize:', cw, 'x', ch);
+            sendBackendLog('info', '[ORIG] 原图像素:' + img.width + 'x' + img.height + ' 容器大小:' + cw + 'x' + ch, 'preview');
         };
         img.src = URL.createObjectURL(file);
     }
@@ -1148,9 +1153,15 @@ function showCompletion(task) {
                 var placeholder = document.getElementById('imageComparePlaceholder');
                 if (placeholder) placeholder.style.display = 'none';
                 initCompareSlider('image');
+                // 打印图片实际像素和容器显示大小
+                var rw = this.naturalWidth, rh = this.naturalHeight;
+                var cw = container ? container.offsetWidth : 0, ch = container ? container.offsetHeight : 0;
+                console.log('[RESULT IMAGE] naturalSize:', rw, 'x', rh, '| containerSize:', cw, 'x', ch);
+                sendBackendLog('info', '[RESULT] 结果图像素:' + rw + 'x' + rh + ' 容器大小:' + cw + 'x' + ch, 'completion');
             };
             resultImage.onerror = function() {
                 console.error('Failed to load result image:', fileUrl);
+                sendBackendLog('error', '结果图片加载失败: ' + fileUrl, 'completion');
             };
             resultImage.src = fileUrl;
         }
