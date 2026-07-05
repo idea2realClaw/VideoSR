@@ -18,6 +18,10 @@ import numpy as np
 import cv2
 from PIL import Image
 
+import torch
+import torchvision.transforms as transforms
+from torch.nn.functional import interpolate as torch_interpolate, pad as torch_pad
+
 # 配置
 BASE_DIR = Path(__file__).parent
 UPLOAD_DIR = BASE_DIR / "uploads"
@@ -224,7 +228,7 @@ class NPUSuperResEngine:
         
         # Convert back to PIL
         padded_img = padded[0]
-        padded_img = torch.clip(padded_img, min=0.0, max=1.0)
+        padded_img = torch.clamp(padded_img, min=0.0, max=1.0)
         np_out = (padded_img.permute(1, 2, 0).detach().numpy() * 255).astype(np.uint8)
         return Image.fromarray(np_out), scale, (pad_left, pad_top)
     
@@ -240,7 +244,7 @@ class NPUSuperResEngine:
         
         # Convert back to PIL
         cropped_img = cropped[0]
-        cropped_img = torch.clip(cropped_img, min=0.0, max=1.0)
+        cropped_img = torch.clamp(cropped_img, min=0.0, max=1.0)
         np_out = (cropped_img.permute(1, 2, 0).detach().numpy() * 255).astype(np.uint8)
         return Image.fromarray(np_out)
 
@@ -743,10 +747,23 @@ def start_process():
         if not file_path or not Path(file_path).exists():
             return jsonify({'success': False, 'message': '文件不存在'}), 400
             
-        # 判断文件类型
-        file_type = 'video'
-        if Path(file_path).suffix.lower() in ALLOWED_IMAGE_EXTENSIONS:
+        # 判断文件类型（优先扩展名，失败时用 PIL 尝试打开）
+        file_suffix = Path(file_path).suffix.lower()
+        file_type = None
+        if file_suffix in ALLOWED_IMAGE_EXTENSIONS:
             file_type = 'image'
+        elif file_suffix in ALLOWED_VIDEO_EXTENSIONS:
+            file_type = 'video'
+        else:
+            # 扩展名无法识别，尝试用 PIL 打开确认是否为图片
+            try:
+                with Image.open(file_path) as test_img:
+                    test_img.verify()
+                file_type = 'image'
+                print(f"[INFO] 扩展名未识别，但成功以图片方式打开: {file_path}")
+            except Exception:
+                file_type = 'video'
+                print(f"[WARN] 扩展名未识别，默认按视频处理: {file_path}")
         
         print(f"Task type: {file_type}")
         
