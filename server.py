@@ -18,10 +18,6 @@ import numpy as np
 import cv2
 from PIL import Image
 
-import torch
-import torchvision.transforms as transforms
-from torch.nn.functional import interpolate as torch_interpolate, pad as torch_pad
-
 # 配置
 BASE_DIR = Path(__file__).parent
 UPLOAD_DIR = BASE_DIR / "uploads"
@@ -204,49 +200,38 @@ class NPUSuperResEngine:
         return final_bgr
     
     def _resize_pad(self, image, dst_size):
-        """Resize and pad image to dst_size"""
-        transform = transforms.Compose([transforms.PILToTensor()])
-        img = transform(image).float().unsqueeze(0)
-        
-        height, width = img.shape[-2:]
+        """Resize and pad image to dst_size (PIL-only, no torch)"""
+        orig_w, orig_h = image.size
         dst_h, dst_w = dst_size
-        h_ratio = dst_h / height
-        w_ratio = dst_w / width
+        # 计算缩放比（保持宽高比）
+        h_ratio = dst_h / orig_h
+        w_ratio = dst_w / orig_w
         scale = min(h_ratio, w_ratio)
-        
-        new_h = int(height * scale)
-        new_w = int(width * scale)
+        # 缩放
+        new_w = int(orig_w * scale)
+        new_h = int(orig_h * scale)
+        resized = image.resize((new_w, new_h), Image.BICUBIC)
+        # 居中填充到 dst_size
         pad_h = dst_h - new_h
         pad_w = dst_w - new_w
         pad_top = pad_h // 2
-        pad_bottom = pad_h // 2 + pad_h % 2
         pad_left = pad_w // 2
-        pad_right = pad_w // 2 + pad_w % 2
-        
-        rescaled = torch_interpolate(img, size=[new_h, new_w], mode="bilinear")
-        padded = torch_pad(rescaled, (pad_left, pad_right, pad_top, pad_bottom), mode="constant")
-        
-        # Convert back to PIL
-        padded_img = padded[0]
-        padded_img = torch.clamp(padded_img, min=0.0, max=1.0)
-        np_out = (padded_img.permute(1, 2, 0).detach().numpy() * 255).astype(np.uint8)
-        return Image.fromarray(np_out), scale, (pad_left, pad_top)
+        padded = Image.new('RGB', (dst_w, dst_h), (0, 0, 0))
+        padded.paste(resized, (pad_left, pad_top))
+        return padded, scale, (pad_left, pad_top)
     
     def _undo_resize_pad(self, image, orig_size_wh, scale, padding):
-        """Undo resize and pad"""
-        transform = transforms.Compose([transforms.PILToTensor()])
-        img = transform(image).float().unsqueeze(0)
-        
-        w, h = orig_size_wh
-        rescaled = torch_interpolate(img, scale_factor=1/scale, mode="bilinear")
-        scaled_pad = [int(round(padding[0]/scale)), int(round(padding[1]/scale))]
-        cropped = rescaled[..., scaled_pad[1]:scaled_pad[1]+h, scaled_pad[0]:scaled_pad[0]+w]
-        
-        # Convert back to PIL
-        cropped_img = cropped[0]
-        cropped_img = torch.clamp(cropped_img, min=0.0, max=1.0)
-        np_out = (cropped_img.permute(1, 2, 0).detach().numpy() * 255).astype(np.uint8)
-        return Image.fromarray(np_out)
+        """Undo resize and pad (PIL-only, no torch)"""
+        dst_w, dst_h = image.size
+        w, h = int(orig_size_wh[0]), int(orig_size_wh[1])
+        pad_left = int(padding[0])
+        pad_top = int(padding[1])
+        # 裁剪掉填充区域
+        cropped = image.crop((pad_left, pad_top, pad_left + w, pad_top + h))
+        # 缩回到原始尺寸
+        orig_size = (w, h)
+        cropped = cropped.resize(orig_size, Image.BICUBIC)
+        return cropped
 
 # 全局 NPU 引擎
 npu_engine = NPUSuperResEngine()
