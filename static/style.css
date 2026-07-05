@@ -1905,20 +1905,24 @@ body {
     line-height: 1.6;
 }
 
-/* 图片预览区：无外框，背景透明 */
+/* 图片预览区：无外框，背景透明，居中 */
 #imagePreviewSection {
     background: none;
     border: none;
     padding: 0;
     margin-top: 20px;
+    display: flex;
+    justify-content: center;
 }
 
-/* 图片对比容器：固定 800x800 */
+/* 图片对比容器：尺寸由 JS 动态设置（根据原图实际大小） */
 #imagePreviewSection .compare-container {
-    width: 800px;
-    height: 800px;
-    min-height: auto;
-    max-height: none;
+    width: auto;
+    height: auto;
+    min-width: 300px;
+    min-height: 200px;
+    max-width: 95vw;
+    max-height: 82vh;
     margin: 0 auto;
 }
 

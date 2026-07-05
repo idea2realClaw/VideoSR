@@ -654,11 +654,30 @@ function showPreview(file, uploadResult) {
         
         // 设置原始图片预览
         var origImage = document.getElementById('originalImage');
+        var container = document.getElementById('imageCompareContainer');
         if (origImage) {
             // 释放旧的 Object URL
             if (origImage.src && origImage.src.startsWith('blob:')) {
                 URL.revokeObjectURL(origImage.src);
             }
+            // 图片加载后，根据原图实际大小动态设置容器尺寸
+            origImage.onload = function() {
+                var nw = this.naturalWidth;
+                var nh = this.naturalHeight;
+                if (!nw || !nh) return;
+                // 计算显示尺寸：限制最大宽度 1200px，最大高度 82vh
+                var maxW = Math.min(1200, window.innerWidth * 0.92);
+                var maxH = window.innerHeight * 0.80;
+                var ratio = Math.min(maxW / nw, maxH / nh, 1.0);  // 不超过原图实际像素
+                var dispW = Math.round(nw * ratio);
+                var dispH = Math.round(nh * ratio);
+                if (container) {
+                    container.style.width = dispW + 'px';
+                    container.style.height = dispH + 'px';
+                }
+                console.log('Container sized to:', dispW, 'x', dispH, '(natural:', nw, 'x', nh, ')');
+                sendBackendLog('info', '图片视图尺寸: ' + dispW + 'x' + dispH + ' (原图: ' + nw + 'x' + nh + ')', 'preview');
+            };
             var objectUrl = URL.createObjectURL(file);
             origImage.src = objectUrl;
             origImage.style.display = 'block';
