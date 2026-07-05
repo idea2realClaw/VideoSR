@@ -416,9 +416,10 @@ def process_image_task(task_id):
             
             update_task(task_id, status='postprocessing', progress=90)
             
-            # 保存输出文件（强制 JPG 格式）
+            # 保存输出文件（强制 JPG 格式，文件名：原图名称_SRx4.jpg）
             fmt = 'jpg'
-            output_filename = f"videosr_{task_id}_{scale}x.{fmt}"
+            original_stem = Path(file_path).stem
+            output_filename = f"{original_stem}_SRx{scale}.{fmt}"
             output_path = OUTPUT_DIR / output_filename
             
             save_kwargs = {}
