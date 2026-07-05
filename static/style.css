@@ -1201,7 +1201,23 @@ body {
 /* ==========================================
    响应式设计
    ========================================== */
-@media (max-width: 768px) {
+@media (max-width: 900px) {
+    .workspace-container {
+        flex-direction: column;
+    }
+    
+    .action-panel {
+        width: 100%;
+        position: static;
+        max-height: none;
+        overflow-y: visible;
+        padding-right: 0;
+    }
+    
+    .preview-panel {
+        width: 100%;
+    }
+    
     .hero-title {
         font-size: 2.5rem;
     }
@@ -1238,6 +1254,17 @@ body {
     .complete-actions {
         flex-direction: column;
     }
+    
+    .mode-switcher {
+        flex-direction: column;
+        padding: 12px;
+        gap: 8px;
+    }
+    
+    .mode-btn {
+        justify-content: center;
+        padding: 10px 16px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -1257,21 +1284,85 @@ body {
         padding: 6px 10px;
         font-size: 0.85rem;
     }
+    
+    .mode-switcher {
+        padding: 8px;
+    }
+    
+    .mode-btn {
+        padding: 8px 12px;
+        font-size: 0.9rem;
+    }
 }
 
 /* ==========================================
-   模式切换
+   工作区容器（左右分栏）
+   ========================================== */
+.workspace-container {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    max-width: var(--container-width);
+    margin: 0 auto;
+    padding: 0 24px;
+}
+
+/* 左侧：预览面板（最大化空间） */
+.preview-panel {
+    flex: 1;
+    min-width: 0;
+}
+
+/* 右侧：操作面板（固定宽度） */
+.action-panel {
+    width: 320px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: sticky;
+    top: calc(var(--nav-height) + 20px);
+    max-height: calc(100vh - var(--nav-height) - 40px);
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+/* 操作面板内的开始按钮 */
+.action-panel .action-buttons {
+    text-align: center;
+}
+
+.action-panel .action-buttons .btn-large {
+    width: 100%;
+    padding: 16px 24px;
+    font-size: 1.15rem;
+}
+
+/* 操作面板内的设置面板 */
+.action-panel .settings-panel {
+    margin-top: 0;
+}
+
+/* 操作面板内的进度区域 */
+.action-panel .progress-section {
+    margin-top: 0;
+}
+
+/* 操作面板内的完成区域 */
+.action-panel .complete-section {
+    margin-top: 0;
+}
+
+/* ==========================================
+   模式切换（在首页区域内）
    ========================================== */
 .mode-switcher {
-    position: sticky;
-    top: var(--nav-height);
-    z-index: 999;
     display: flex;
     justify-content: center;
     gap: 12px;
     padding: 20px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-color);
+    max-width: 500px;
+    margin: 0 auto;
 }
 
 .mode-btn {
@@ -1372,4 +1463,353 @@ body {
         padding: 8px 12px;
         font-size: 0.9rem;
     }
+}
+
+/* ==========================================
+   日志窗口切换按钮（导航栏右侧）
+   ========================================== */
+.log-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.log-toggle-btn:hover {
+    background: var(--primary-bg);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.log-toggle-btn.active {
+    background: var(--primary-bg);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+/* ==========================================
+   主布局（包含主界面和日志面板）
+   ========================================== */
+.app-layout {
+    display: flex;
+    min-height: calc(100vh - var(--nav-height));
+    transition: all var(--transition-normal);
+}
+
+.main-workspace {
+    flex: 1;
+    min-width: 0;
+    transition: all var(--transition-normal);
+}
+
+/* ==========================================
+   日志面板
+   ========================================== */
+.log-panel {
+    flex: 0 0 0;
+    min-width: 0;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    transition: all var(--transition-normal);
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.05);
+}
+
+.log-panel.open {
+    flex: 0 0 25vw;
+    min-width: 300px;
+}
+
+.log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.log-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.log-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.log-action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.log-action-btn:hover {
+    background: var(--bg-hover);
+}
+
+.log-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--bg-primary);
+}
+
+.log-entries {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+
+.log-entry {
+    padding: 6px 10px;
+    margin-bottom: 4px;
+    border-radius: var(--radius-sm);
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    user-select: text;
+}
+
+.log-info {
+    color: var(--text-secondary);
+    background: transparent;
+}
+
+.log-success {
+    color: var(--success);
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.log-warning {
+    color: var(--warning);
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.log-error {
+    color: var(--danger);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.log-input {
+    color: var(--primary);
+    background: rgba(99, 102, 241, 0.05);
+    border-left: 3px solid var(--primary);
+}
+
+.log-output {
+    color: var(--success);
+    background: rgba(16, 185, 129, 0.05);
+    border-left: 3px solid var(--success);
+}
+
+/* 深色主题下的日志颜色调整 */
+[data-theme="dark"] .log-content {
+    background: #0f172a;
+}
+
+[data-theme="dark"] .log-entry {
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .log-success {
+    color: #34d399;
+}
+
+[data-theme="dark"] .log-error {
+    color: #f87171;
+}
+
+[data-theme="dark"] .log-warning {
+    color: #fbbf24;
+}
+
+[data-theme="dark"] .log-input {
+    color: #818cf8;
+}
+
+[data-theme="dark"] .log-output {
+    color: #34d399;
+}
+
+/* ==========================================
+   图片/视频对比滑动条
+   ========================================== */
+.compare-container {
+    position: relative;
+    width: 100%;
+    min-height: 200px;
+    max-height: 500px;
+    overflow: hidden;
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
+    user-select: none;
+}
+
+.compare-original {
+    position: relative;
+    width: 100%;
+    height: auto;
+    z-index: 1;
+}
+
+.compare-original img,
+.compare-original video {
+    width: 100%;
+    height: auto;
+    max-height: 500px;
+    object-fit: contain;
+    display: block;
+}
+
+/* 对比模式激活后的样式 */
+.compare-container.comparing .compare-original {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.compare-container.comparing .compare-original img,
+.compare-container.comparing .compare-original video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.compare-result {
+    display: none;
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 50%;
+    height: 100%;
+    overflow: hidden;
+    z-index: 2;
+    border-left: 2px solid rgba(255,255,255,0.7);
+}
+
+.compare-container.comparing .compare-result {
+    display: block;
+}
+
+.compare-result img,
+.compare-result video {
+    width: auto;
+    height: 100%;
+    min-width: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.compare-slider {
+    display: none;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 40px;
+    transform: translateX(-50%);
+    z-index: 10;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: ew-resize;
+}
+
+.compare-container.comparing .compare-slider {
+    display: flex;
+}
+
+.compare-slider-line {
+    flex: 1;
+    width: 2px;
+    background: rgba(255,255,255,0.8);
+}
+
+.compare-slider-handle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    z-index: 11;
+}
+
+.compare-label {
+    position: absolute;
+    top: 12px;
+    padding: 4px 12px;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    pointer-events: none;
+    z-index: 5;
+}
+
+.compare-label-left {
+    left: 12px;
+}
+
+.compare-label-right {
+    right: 12px;
+}
+
+.compare-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 3;
+    background: var(--bg-secondary);
+}
+
+.compare-info {
+    margin-top: 12px;
+    text-align: center;
+}
+
+/* 日志面板独立滚动 */
+.log-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--bg-primary);
+    max-height: calc(100vh - 200px);
+}
+
+.log-entries {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
 }

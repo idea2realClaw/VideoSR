@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VideoSR - AI视频/图片超分辨率增强工具</title>
-    <link rel="stylesheet" href="static/style.css">
+    <link rel="stylesheet" href="static/style.css?v=2026070526">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
 </head>
 <body>
@@ -23,370 +23,385 @@
                 <button class="theme-toggle" id="themeToggle" title="切换主题">
                     <span class="theme-icon">🌙</span>
                 </button>
+                <!-- 日志窗口切换按钮 -->
+                <button class="log-toggle-btn" id="logToggleBtn" title="打开/关闭日志窗口">
+                    <span>📋</span>
+                    <span>日志</span>
+                </button>
             </div>
         </div>
     </nav>
 
-    <!-- 主内容区 -->
-    <main class="main-content">
-        <!-- 首页区域 -->
-        <section id="home" class="hero-section">
-            <div class="hero-content">
-                <h1 class="hero-title">
-                    <span class="gradient-text">AI超分辨率</span>
-                    <br>增强工具
-                </h1>
-                <p class="hero-subtitle" id="heroSubtitle">
-                    免费、开源、隐私安全 - 在浏览器中直接使用AI增强您的视频和图片画质
-                </p>
-                <div class="hero-features">
-                    <div class="feature-tag">
-                        <span class="tag-icon">🔒</span>
-                        <span>100% 隐私保护</span>
+    <!-- 主内容区（包含主界面和日志面板） -->
+    <div class="app-layout" id="appLayout">
+        <!-- 左侧主界面 -->
+        <div class="main-workspace" id="mainWorkspace">
+            <!-- 首页区域 -->
+            <section id="home" class="hero-section">
+                <div class="hero-content">
+                    <h1 class="hero-title">
+                        <span class="gradient-text">AI超分辨率</span>
+                        <br>增强工具
+                    </h1>
+                    <p class="hero-subtitle" id="heroSubtitle">
+                        免费、开源、隐私安全 - 在浏览器中直接使用AI增强您的视频和图片画质
+                    </p>
+                    <div class="hero-features">
+                        <div class="feature-tag">
+                            <span class="tag-icon">🔒</span>
+                            <span>100% 隐私保护</span>
+                        </div>
+                        <div class="feature-tag">
+                            <span class="tag-icon">⚡</span>
+                            <span>闪电般快速</span>
+                        </div>
+                        <div class="feature-tag">
+                            <span class="tag-icon">🎨</span>
+                            <span>高质量输出</span>
+                        </div>
                     </div>
-                    <div class="feature-tag">
-                        <span class="tag-icon">⚡</span>
-                        <span>闪电般快速</span>
+                </div>
+                <!-- 模式切换放在首页 -->
+                <div class="mode-switcher">
+                    <button class="mode-btn active" data-mode="video" id="videoModeBtn">
+                        <span class="mode-icon">🎬</span>
+                        <span>视频超分</span>
+                    </button>
+                    <button class="mode-btn" data-mode="image" id="imageModeBtn">
+                        <span class="mode-icon">🖼️</span>
+                        <span>图片超分</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- 工作区：左侧预览，右侧操作 -->
+            <section class="workspace-section">
+                <div class="workspace-container">
+                    <!-- 左侧：预览面板（最大化空间） -->
+                    <div class="preview-panel" id="previewPanel">
+                        <!-- 上传区域 -->
+                        <div class="upload-area" id="uploadArea">
+                            <div class="upload-content" id="uploadContent">
+                                <div class="upload-icon">
+                                    <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                                        <circle cx="40" cy="40" r="38" stroke="currentColor" stroke-width="2" stroke-dasharray="8 4" opacity="0.3"/>
+                                        <path d="M40 20V50M28 35L40 20L52 35" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M20 55H60" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                                    </svg>
+                                </div>
+                                <h3 class="upload-title" id="uploadTitle">拖拽视频到这里</h3>
+                                <p class="upload-subtitle">或者点击选择文件</p>
+                                <p class="upload-formats" id="uploadFormats">支持格式: MP4, AVI, MOV, MKV, WebM</p>
+                                <p class="upload-limit" id="uploadLimit">最大文件大小: 500MB</p>
+                                <button class="btn btn-primary upload-btn" id="uploadBtn">
+                                    <span id="uploadBtnText">选择视频文件</span>
+                                </button>
+                                <input type="file" id="fileInput" accept="video/*,image/*" hidden>
+                            </div>
+                        </div>
+
+                        <!-- 视频预览区域 -->
+                        <div class="preview-section" id="videoPreviewSection" style="display: none;">
+                            <div class="preview-header">
+                                <h3 class="preview-title">视频预览</h3>
+                                <button class="btn-icon" id="removeVideo" title="移除视频">
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                        <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="preview-container">
+                                <div class="compare-container" id="videoCompareContainer">
+                                    <div class="compare-original">
+                                        <video id="originalVideo" controls>
+                                            <source src="" type="">
+                                            您的浏览器不支持视频播放
+                                        </video>
+                                        <div class="compare-label compare-label-left">原始</div>
+                                    </div>
+                                    <div class="compare-result" id="videoCompareResult">
+                                        <video id="resultVideo" controls style="display:none;">
+                                            <source src="" type="">
+                                        </video>
+                                        <div class="compare-label compare-label-right">增强后</div>
+                                    </div>
+                                    <div class="compare-slider" id="videoCompareSlider">
+                                        <div class="compare-slider-line"></div>
+                                        <div class="compare-slider-handle">⬌</div>
+                                        <div class="compare-slider-line"></div>
+                                    </div>
+                                    <div class="compare-placeholder" id="videoComparePlaceholder">
+                                        <div class="placeholder-icon">🎬</div>
+                                        <p>处理完成后显示对比</p>
+                                    </div>
+                                </div>
+                                <div class="compare-info">
+                                    <div class="video-info" id="originalVideoInfo" style="display:inline-block;"></div>
+                                    <div class="video-info" id="resultVideoInfo" style="display:inline-block; margin-left:12px;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 图片预览区域 -->
+                        <div class="preview-section" id="imagePreviewSection" style="display: none;">
+                            <div class="preview-header">
+                                <h3 class="preview-title">图片预览</h3>
+                                <button class="btn-icon" id="removeImage" title="移除图片">
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                        <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="preview-container image-preview-container">
+                                <div class="compare-container" id="imageCompareContainer">
+                                    <div class="compare-original">
+                                        <img id="originalImage" alt="原始图片">
+                                        <div class="compare-label compare-label-left">原始</div>
+                                    </div>
+                                    <div class="compare-result" id="imageCompareResult">
+                                        <img id="resultImage" alt="增强后图片">
+                                        <div class="compare-label compare-label-right">增强后</div>
+                                    </div>
+                                    <div class="compare-slider" id="imageCompareSlider">
+                                        <div class="compare-slider-line"></div>
+                                        <div class="compare-slider-handle">⬌</div>
+                                        <div class="compare-slider-line"></div>
+                                    </div>
+                                    <div class="compare-placeholder" id="imageComparePlaceholder">
+                                        <div class="placeholder-icon">🖼️</div>
+                                        <p>处理完成后显示对比</p>
+                                    </div>
+                                </div>
+                                <div class="compare-info">
+                                    <div class="video-info" id="originalImageInfo" style="display:inline-block;"></div>
+                                    <div class="video-info" id="resultImageInfo" style="display:inline-block; margin-left:12px;"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="feature-tag">
-                        <span class="tag-icon">🎨</span>
-                        <span>高质量输出</span>
+
+                    <!-- 右侧：操作面板 -->
+                    <div class="action-panel" id="actionPanel" style="display: none;">
+                        <!-- 开始超分按钮 -->
+                        <div class="action-buttons">
+                            <button class="btn btn-primary btn-large" id="startBtn">
+                                <span class="btn-icon-left">✨</span>
+                                <span id="startBtnText">开始超分处理</span>
+                            </button>
+                        </div>
+
+                        <!-- 进度显示 -->
+                        <div class="progress-section" id="progressSection" style="display: none;">
+                            <div class="progress-header">
+                                <h4 class="progress-title" id="progressTitle">正在处理...</h4>
+                                <span class="progress-percent" id="progressPercent">0%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progressFill"></div>
+                            </div>
+                            <div class="progress-details">
+                                <div class="progress-detail">
+                                    <span class="detail-label">状态</span>
+                                    <span class="detail-value" id="progressStatus">等待中</span>
+                                </div>
+                                <div class="progress-detail" id="framesDetail">
+                                    <span class="detail-label">已处理</span>
+                                    <span class="detail-value" id="progressProcessed">0 / 0 帧</span>
+                                </div>
+                                <div class="progress-detail">
+                                    <span class="detail-label">预计剩余</span>
+                                    <span class="detail-value" id="progressEta">--</span>
+                                </div>
+                            </div>
+                            <button class="btn btn-danger btn-small" id="cancelBtn">取消处理</button>
+                        </div>
+
+                        <!-- 完成区域 -->
+                        <div class="complete-section" id="completeSection" style="display: none;">
+                            <div class="complete-icon">✅</div>
+                            <h4 class="complete-title">处理完成！</h4>
+                            <p class="complete-info" id="completeInfo"></p>
+                            <div class="complete-actions">
+                                <button class="btn btn-primary" id="downloadBtn">
+                                    <span id="downloadBtnText">下载增强视频</span>
+                                </button>
+                                <button class="btn btn-secondary" id="newVideoBtn">
+                                    <span>处理新文件</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 设置面板 -->
+                        <div class="settings-panel" id="settingsPanel">
+                            <div class="settings-header">
+                                <h3>超分设置</h3>
+                                <button class="btn-icon settings-toggle" id="settingsToggle">
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                        <path d="M5 8L10 3L15 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="settings-content" id="settingsContent">
+                                <!-- 放大倍数 -->
+                                <div class="setting-group">
+                                    <label class="setting-label">
+                                        放大倍数
+                                        <span class="setting-hint">选择输出分辨率倍数</span>
+                                    </label>
+                                    <div class="scale-selector">
+                                        <button class="scale-btn" data-scale="2">2x</button>
+                                        <button class="scale-btn active" data-scale="4">4x</button>
+                                    </div>
+                                </div>
+
+                                <!-- 超分算法 -->
+                                <div class="setting-group">
+                                    <label class="setting-label">
+                                        超分算法
+                                        <span class="setting-hint">选择AI超分辨率算法模型</span>
+                                    </label>
+                                    <div class="model-selector">
+                                        <div class="model-option active" data-model="real_esrgan">
+                                            <div class="model-radio"></div>
+                                            <div class="model-info">
+                                                <h5>Real-ESRGAN</h5>
+                                                <p>通用图像/视频超分，效果均衡</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 降噪级别 -->
+                                <div class="setting-group">
+                                    <label class="setting-label">
+                                        降噪级别
+                                        <span class="setting-value" id="denoiseValue">中</span>
+                                    </label>
+                                    <input type="range" class="setting-range" id="denoiseLevel" min="0" max="3" value="2" step="1">
+                                    <div class="range-labels">
+                                        <span>无</span>
+                                        <span>低</span>
+                                        <span>中</span>
+                                        <span>高</span>
+                                    </div>
+                                </div>
+
+                                <!-- 输出格式（图片模式） -->
+                                <div class="setting-group" id="imageFormatGroup" style="display: none;">
+                                    <label class="setting-label">
+                                        输出格式
+                                        <span class="setting-hint">选择输出图片格式</span>
+                                    </label>
+                                    <div class="format-selector">
+                                        <button class="format-btn active" data-format="png">PNG</button>
+                                        <button class="format-btn" data-format="jpg">JPG</button>
+                                        <button class="format-btn" data-format="webp">WebP</button>
+                                    </div>
+                                </div>
+
+                                <!-- 输出格式（视频模式） -->
+                                <div class="setting-group" id="videoFormatGroup">
+                                    <label class="setting-label">
+                                        输出格式
+                                        <span class="setting-hint">选择输出视频的编码格式</span>
+                                    </label>
+                                    <div class="format-selector">
+                                        <button class="format-btn active" data-format="mp4">MP4</button>
+                                        <button class="format-btn" data-format="webm">WebM</button>
+                                        <button class="format-btn" data-format="mkv">MKV</button>
+                                    </div>
+                                </div>
+
+                                <!-- 高级设置 -->
+                                <div class="setting-group advanced-settings" id="videoAdvancedSettings">
+                                    <div class="advanced-header" id="advancedToggle">
+                                        <span>高级设置</span>
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="advanced-arrow">
+                                            <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </div>
+                                    <div class="advanced-content" id="advancedContent" style="display: none;">
+                                        <div class="setting-item">
+                                            <label>帧率保持</label>
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" id="keepFps" checked>
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                        </div>
+                                        <div class="setting-item">
+                                            <label>音频保持</label>
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" id="keepAudio" checked>
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                        </div>
+                                        <div class="setting-item">
+                                            <label>输出比特率 (Mbps)</label>
+                                            <input type="number" class="setting-input" id="bitrate" value="8" min="1" max="50">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 功能特性展示 -->
+            <div class="features-section" id="features">
+                <h2 class="section-title">强大功能特性</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">🚀</div>
+                        <h4>AI超分辨率</h4>
+                        <p>使用最先进的AI模型，将低分辨率视频/图片提升至4K品质</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔧</div>
+                        <h4>多种算法</h4>
+                        <p>支持Real-ESRGAN、BasicVSR++、EDVR等多种超分算法</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🎨</div>
+                        <h4>降噪增强</h4>
+                        <p>智能降噪，去除压缩伪影，恢复视频/图片细节</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">⚡</div>
+                        <h4>快速处理</h4>
+                        <p>优化的处理流程，支持GPU加速，快速完成增强</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔒</div>
+                        <h4>隐私保护</h4>
+                        <p>所有处理在本地完成，文件不会上传到服务器</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">💎</div>
+                        <h4>完全免费</h4>
+                        <p>开源免费使用，无任何功能限制或水印</p>
                     </div>
                 </div>
             </div>
-        </section>
-
-        <!-- 模式切换 -->
-        <div class="mode-switcher">
-            <button class="mode-btn active" data-mode="video" id="videoModeBtn">
-                <span class="mode-icon">🎬</span>
-                <span>视频超分</span>
-            </button>
-            <button class="mode-btn" data-mode="image" id="imageModeBtn">
-                <span class="mode-icon">🖼️</span>
-                <span>图片超分</span>
-            </button>
         </div>
 
-        <!-- 上传和处理区域 -->
-        <section class="workspace-section">
-            <div class="container">
-                <!-- 上传区域 -->
-                <div class="upload-area" id="uploadArea">
-                    <div class="upload-content" id="uploadContent">
-                        <div class="upload-icon">
-                            <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
-                                <circle cx="40" cy="40" r="38" stroke="currentColor" stroke-width="2" stroke-dasharray="8 4" opacity="0.3"/>
-                                <path d="M40 20V50M28 35L40 20L52 35" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                                <path d="M20 55H60" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-                            </svg>
-                        </div>
-                        <h3 class="upload-title" id="uploadTitle">拖拽视频到这里</h3>
-                        <p class="upload-subtitle">或者点击选择文件</p>
-                        <p class="upload-formats" id="uploadFormats">支持格式: MP4, AVI, MOV, MKV, WebM</p>
-                        <p class="upload-limit" id="uploadLimit">最大文件大小: 500MB</p>
-                        <button class="btn btn-primary upload-btn" id="uploadBtn">
-                            <span id="uploadBtnText">选择视频文件</span>
-                        </button>
-                        <input type="file" id="fileInput" accept="video/*,image/*" hidden>
-                    </div>
-                </div>
-
-                <!-- 视频预览区域 -->
-                <div class="preview-section" id="videoPreviewSection" style="display: none;">
-                    <div class="preview-header">
-                        <h3 class="preview-title">视频预览</h3>
-                        <button class="btn-icon" id="removeVideo" title="移除视频">
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="preview-container">
-                        <div class="preview-box">
-                            <h4>原始视频</h4>
-                            <video id="originalVideo" controls>
-                                <source src="" type="">
-                                您的浏览器不支持视频播放
-                            </video>
-                            <div class="video-info" id="originalVideoInfo"></div>
-                        </div>
-                        <div class="preview-divider">
-                            <div class="divider-icon">→</div>
-                        </div>
-                        <div class="preview-box">
-                            <h4>增强后 <span class="badge">预览</span></h4>
-                            <div class="preview-placeholder" id="videoResultPlaceholder">
-                                <div class="placeholder-icon">🎬</div>
-                                <p>处理完成后显示预览</p>
-                            </div>
-                            <video id="resultVideo" controls style="display: none;">
-                                <source src="" type="">
-                            </video>
-                            <div class="video-info" id="resultVideoInfo"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 图片预览区域 -->
-                <div class="preview-section" id="imagePreviewSection" style="display: none;">
-                    <div class="preview-header">
-                        <h3 class="preview-title">图片预览</h3>
-                        <button class="btn-icon" id="removeImage" title="移除图片">
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="preview-container image-preview-container">
-                        <div class="preview-box">
-                            <h4>原始图片</h4>
-                            <div class="image-preview-wrapper">
-                                <img id="originalImage" alt="原始图片">
-                            </div>
-                            <div class="video-info" id="originalImageInfo"></div>
-                        </div>
-                        <div class="preview-divider">
-                            <div class="divider-icon">→</div>
-                        </div>
-                        <div class="preview-box">
-                            <h4>增强后 <span class="badge">预览</span></h4>
-                            <div class="preview-placeholder" id="imageResultPlaceholder">
-                                <div class="placeholder-icon">🖼️</div>
-                                <p>处理完成后显示预览</p>
-                            </div>
-                            <div class="image-preview-wrapper" id="resultImageWrapper" style="display: none;">
-                                <img id="resultImage" alt="增强后图片">
-                            </div>
-                            <div class="video-info" id="resultImageInfo"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 设置面板 -->
-                <div class="settings-panel" id="settingsPanel" style="display: none;">
-                    <div class="settings-header">
-                        <h3>超分设置</h3>
-                        <button class="btn-icon settings-toggle" id="settingsToggle">
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                <path d="M5 8L10 3L15 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="settings-content" id="settingsContent">
-                        <!-- 放大倍数 -->
-                        <div class="setting-group">
-                            <label class="setting-label">
-                                放大倍数
-                                <span class="setting-hint">选择输出分辨率倍数</span>
-                            </label>
-                            <div class="scale-selector">
-                                <button class="scale-btn" data-scale="2">2x</button>
-                                <button class="scale-btn active" data-scale="4">4x</button>
-                            </div>
-                        </div>
-
-                        <!-- 超分算法 -->
-                        <div class="setting-group">
-                            <label class="setting-label">
-                                超分算法
-                                <span class="setting-hint">选择AI超分辨率算法模型</span>
-                            </label>
-                            <div class="model-selector">
-                                <div class="model-option" data-model="realesrgan">
-                                    <div class="model-radio"></div>
-                                    <div class="model-info">
-                                        <h5>Real-ESRGAN</h5>
-                                        <p>通用图像/视频超分，效果均衡</p>
-                                    </div>
-                                </div>
-                                <div class="model-option active" data-model="basicvsr++">
-                                    <div class="model-radio"></div>
-                                    <div class="model-info">
-                                        <h5>BasicVSR++</h5>
-                                        <p>视频专用超分，时序一致性好</p>
-                                    </div>
-                                </div>
-                                <div class="model-option" data-model="edvr">
-                                    <div class="model-radio"></div>
-                                    <div class="model-info">
-                                        <h5>EDVR</h5>
-                                        <p>可变形卷积视频恢复，细节丰富</p>
-                                    </div>
-                                </div>
-                                <div class="model-option" data-model="waifu2x">
-                                    <div class="model-radio"></div>
-                                    <div class="model-info">
-                                        <h5>Waifu2x</h5>
-                                        <p>动漫/插画风格视频优化</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 降噪级别 -->
-                        <div class="setting-group">
-                            <label class="setting-label">
-                                降噪级别
-                                <span class="setting-value" id="denoiseValue">中</span>
-                            </label>
-                            <input type="range" class="setting-range" id="denoiseLevel" min="0" max="3" value="2" step="1">
-                            <div class="range-labels">
-                                <span>无</span>
-                                <span>低</span>
-                                <span>中</span>
-                                <span>高</span>
-                            </div>
-                        </div>
-
-                        <!-- 输出格式（图片模式） -->
-                        <div class="setting-group" id="imageFormatGroup" style="display: none;">
-                            <label class="setting-label">
-                                输出格式
-                                <span class="setting-hint">选择输出图片格式</span>
-                            </label>
-                            <div class="format-selector">
-                                <button class="format-btn active" data-format="png">PNG</button>
-                                <button class="format-btn" data-format="jpg">JPG</button>
-                                <button class="format-btn" data-format="webp">WebP</button>
-                            </div>
-                        </div>
-
-                        <!-- 输出格式（视频模式） -->
-                        <div class="setting-group" id="videoFormatGroup">
-                            <label class="setting-label">
-                                输出格式
-                                <span class="setting-hint">选择输出视频的编码格式</span>
-                            </label>
-                            <div class="format-selector">
-                                <button class="format-btn active" data-format="mp4">MP4</button>
-                                <button class="format-btn" data-format="webm">WebM</button>
-                                <button class="format-btn" data-format="mkv">MKV</button>
-                            </div>
-                        </div>
-
-                        <!-- 高级设置 -->
-                        <div class="setting-group advanced-settings" id="videoAdvancedSettings">
-                            <div class="advanced-header" id="advancedToggle">
-                                <span>高级设置</span>
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="advanced-arrow">
-                                    <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                </svg>
-                            </div>
-                            <div class="advanced-content" id="advancedContent" style="display: none;">
-                                <div class="setting-item">
-                                    <label>帧率保持</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="keepFps" checked>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </div>
-                                <div class="setting-item">
-                                    <label>音频保持</label>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="keepAudio" checked>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </div>
-                                <div class="setting-item">
-                                    <label>输出比特率 (Mbps)</label>
-                                    <input type="number" class="setting-input" id="bitrate" value="8" min="1" max="50">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 处理按钮和进度 -->
-                <div class="action-section" id="actionSection" style="display: none;">
-                    <div class="action-buttons">
-                        <button class="btn btn-primary btn-large" id="startBtn">
-                            <span class="btn-icon-left">✨</span>
-                            <span id="startBtnText">开始超分处理</span>
-                        </button>
-                    </div>
-
-                    <!-- 进度显示 -->
-                    <div class="progress-section" id="progressSection" style="display: none;">
-                        <div class="progress-header">
-                            <h4 class="progress-title" id="progressTitle">正在处理...</h4>
-                            <span class="progress-percent" id="progressPercent">0%</span>
-                        </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" id="progressFill"></div>
-                        </div>
-                        <div class="progress-details">
-                            <div class="progress-detail">
-                                <span class="detail-label">状态</span>
-                                <span class="detail-value" id="progressStatus">等待中</span>
-                            </div>
-                            <div class="progress-detail" id="framesDetail">
-                                <span class="detail-label">已处理</span>
-                                <span class="detail-value" id="progressProcessed">0 / 0 帧</span>
-                            </div>
-                            <div class="progress-detail">
-                                <span class="detail-label">预计剩余</span>
-                                <span class="detail-value" id="progressEta">--</span>
-                            </div>
-                        </div>
-                        <button class="btn btn-danger btn-small" id="cancelBtn">取消处理</button>
-                    </div>
-
-                    <!-- 完成区域 -->
-                    <div class="complete-section" id="completeSection" style="display: none;">
-                        <div class="complete-icon">✅</div>
-                        <h4 class="complete-title">处理完成！</h4>
-                        <p class="complete-info" id="completeInfo"></p>
-                        <div class="complete-actions">
-                            <button class="btn btn-primary" id="downloadBtn">
-                                <span id="downloadBtnText">下载增强视频</span>
-                            </button>
-                            <button class="btn btn-secondary" id="newVideoBtn">
-                                <span>处理新文件</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 功能特性展示 -->
-                <div class="features-section" id="features">
-                    <h2 class="section-title">强大功能特性</h2>
-                    <div class="features-grid">
-                        <div class="feature-card">
-                            <div class="feature-icon">🚀</div>
-                            <h4>AI超分辨率</h4>
-                            <p>使用最先进的AI模型，将低分辨率视频/图片提升至4K品质</p>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🔧</div>
-                            <h4>多种算法</h4>
-                            <p>支持Real-ESRGAN、BasicVSR++、EDVR等多种超分算法</p>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🎨</div>
-                            <h4>降噪增强</h4>
-                            <p>智能降噪，去除压缩伪影，恢复视频/图片细节</p>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">⚡</div>
-                            <h4>快速处理</h4>
-                            <p>优化的处理流程，支持GPU加速，快速完成增强</p>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🔒</div>
-                            <h4>隐私保护</h4>
-                            <p>所有处理在本地完成，文件不会上传到服务器</p>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">💎</div>
-                            <h4>完全免费</h4>
-                            <p>开源免费使用，无任何功能限制或水印</p>
-                        </div>
-                    </div>
+        <!-- 右侧日志面板 -->
+        <div class="log-panel" id="logPanel">
+            <div class="log-header">
+                <h3 class="log-title">📋 处理日志</h3>
+                <div class="log-actions">
+                    <button class="log-action-btn" id="logClearBtn" title="清空日志">🗑️</button>
+                    <button class="log-action-btn" id="logCloseBtn" title="关闭日志">✕</button>
                 </div>
             </div>
-        </section>
-    </main>
+            <div class="log-content" id="logContent">
+                <div class="log-entries" id="logEntries">
+                    <div class="log-entry log-info">[系统] VideoSR WebUI 已启动</div>
+                    <div class="log-entry log-info">[系统] 等待用户操作...</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- 页脚 -->
     <footer class="footer">
@@ -417,6 +432,6 @@
         <p class="loading-text" id="loadingText">加载中...</p>
     </div>
 
-    <script src="static/app.js"></script>
+    <script src="static/app.js?v=2026070526"></script>
 </body>
 </html>

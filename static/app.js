@@ -4,6 +4,172 @@
  */
 
 // ==========================================
+// 后台日志（所有前端事件都打到后台）
+// ==========================================
+function sendBackendLog(level, message, source) {
+    source = source || 'frontend';
+    // 用 sendBeacon 或 fetch 异步发送，不阻塞 UI
+    try {
+        fetch('/api/frontend-log', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({level: level, message: message, source: source}),
+            keepalive: true
+        }).catch(function(){}); // 静默失败，不影响 UI
+    } catch(e) {}
+}
+
+// ==========================================
+// 心跳检测（每15秒）
+// ==========================================
+var heartbeatInterval = null;
+function startHeartbeat() {
+    if (heartbeatInterval) return;
+    heartbeatInterval = setInterval(function() {
+        fetch('/api/heartbeat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({time: new Date().toISOString()}),
+            keepalive: true
+        }).catch(function(){});
+    }, 15000);
+    console.log('Heartbeat started (15s interval)');
+    sendBackendLog('info', 'Heartbeat started', 'system');
+}
+
+// ==========================================
+// 日志系统
+// ==========================================
+const Logger = {
+    panel: null,
+    entries: null,
+    isOpen: false,
+    
+    init() {
+        this.panel = document.getElementById('logPanel');
+        this.entries = document.getElementById('logEntries');
+        
+        // 绑定按钮事件
+        const logToggleBtn = document.getElementById('logToggleBtn');
+        const logCloseBtn = document.getElementById('logCloseBtn');
+        const logClearBtn = document.getElementById('logClearBtn');
+        
+        if (logToggleBtn) {
+            logToggleBtn.addEventListener('click', () => {
+                console.log('logToggleBtn clicked');
+                sendBackendLog('click', 'logToggleBtn clicked', 'button');
+                this.toggle();
+            });
+        }
+        if (logCloseBtn) {
+            logCloseBtn.addEventListener('click', () => {
+                console.log('logCloseBtn clicked');
+                sendBackendLog('click', 'logCloseBtn clicked', 'button');
+                this.close();
+            });
+        }
+        if (logClearBtn) {
+            logClearBtn.addEventListener('click', () => {
+                console.log('logClearBtn clicked');
+                sendBackendLog('click', 'logClearBtn clicked', 'button');
+                this.clear();
+            });
+        }
+        
+        // 拦截 console.log/warn/error
+        this.interceptConsole();
+    },
+    
+    interceptConsole() {
+        const self = this;
+        
+        // 保存原始 console 方法
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+        
+        // 重写 console.log
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            self.addEntry('info', args.join(' '));
+        };
+        
+        // 重写 console.warn
+        console.warn = function(...args) {
+            originalWarn.apply(console, args);
+            self.addEntry('warning', args.join(' '));
+        };
+        
+        // 重写 console.error
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            self.addEntry('error', args.join(' '));
+        };
+    },
+    
+    toggle() {
+        console.log('Logger.toggle() called, isOpen:', this.isOpen);
+        this.isOpen ? this.close() : this.open();
+    },
+    
+    open() {
+        console.log('Logger.open() called');
+        this.isOpen = true;
+        this.panel.classList.add('open');
+        document.getElementById('logToggleBtn').classList.add('active');
+        this.addEntry('info', '[系统] 日志窗口已打开');
+        console.log('Logger.open() done, panel classes:', this.panel.className);
+    },
+    
+    close() {
+        console.log('Logger.close() called');
+        this.isOpen = false;
+        this.panel.classList.remove('open');
+        document.getElementById('logToggleBtn').classList.remove('active');
+        this.addEntry('info', '[系统] 日志窗口已关闭');
+    },
+    
+    clear() {
+        if (this.entries) {
+            this.entries.innerHTML = '';
+            this.addEntry('info', '[系统] 日志已清空');
+        }
+    },
+    
+    addEntry(type, message) {
+        if (!this.entries) return;
+        
+        const entry = document.createElement('div');
+        entry.className = `log-entry log-${type}`;
+        
+        const timestamp = new Date().toLocaleTimeString('zh-CN', { 
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+        
+        entry.textContent = `[${timestamp}] ${message}`;
+        
+        this.entries.appendChild(entry);
+        
+        // 自动滚动到底部
+        const content = document.getElementById('logContent');
+        if (content) {
+            content.scrollTop = content.scrollHeight;
+        }
+    },
+    
+    // 快捷方法
+    info(msg) { this.addEntry('info', msg); },
+    success(msg) { this.addEntry('success', msg); },
+    warn(msg) { this.addEntry('warning', msg); },
+    error(msg) { this.addEntry('error', msg); },
+    input(msg) { this.addEntry('input', `[输入] ${msg}`); },
+    output(msg) { this.addEntry('output', `[输出] ${msg}`); }
+};
+
+// ==========================================
 // 全局状态和配置
 // ==========================================
 const AppState = {
@@ -14,7 +180,7 @@ const AppState = {
     completedTaskId: null,
     settings: {
         scale: 4,
-        model: 'basicvsr++',
+        model: 'real_esrgan',
         denoise: 2,
         format: 'mp4', // for video: mp4/webm/mkv, for image: png/jpg/webp
         keepFps: true,
@@ -85,6 +251,7 @@ function initElements() {
     
     // 操作区域
     Elements.actionSection = document.getElementById('actionSection');
+    Elements.actionPanel = document.getElementById('actionPanel');
     Elements.startBtn = document.getElementById('startBtn');
     Elements.startBtnText = document.getElementById('startBtnText');
     Elements.progressSection = document.getElementById('progressSection');
@@ -114,14 +281,52 @@ function initElements() {
 // ==========================================
 document.addEventListener('DOMContentLoaded', function() {
     console.log('VideoSR initializing...');
-    initElements();
-    initTheme();
-    initModeSwitch();
-    initUpload();
-    initSettings();
-    initActions();
-    initNavigation();
-    console.log('VideoSR initialized successfully');
+    try {
+        Logger.init();
+        console.log('Logger initialized');
+    } catch(e) { console.error('Logger.init failed:', e); }
+    
+    try {
+        initElements();
+        console.log('Elements initialized');
+    } catch(e) { console.error('initElements failed:', e); }
+    
+    try {
+        initTheme();
+        console.log('Theme initialized');
+    } catch(e) { console.error('initTheme failed:', e); }
+    
+    try {
+        initModeSwitch();
+        console.log('ModeSwitch initialized');
+    } catch(e) { console.error('initModeSwitch failed:', e); }
+    
+    try {
+        initUpload();
+        console.log('Upload initialized');
+    } catch(e) { console.error('initUpload failed:', e); }
+    
+    try {
+        initSettings();
+        console.log('Settings initialized');
+    } catch(e) { console.error('initSettings failed:', e); }
+    
+    try {
+        initActions();
+        console.log('Actions initialized');
+    } catch(e) { console.error('initActions failed:', e); }
+    
+    try {
+        initNavigation();
+        console.log('Navigation initialized');
+    } catch(e) { console.error('initNavigation failed:', e); }
+    
+    // 启动心跳
+    startHeartbeat();
+    
+    Logger.info('VideoSR WebUI 初始化完成');
+    console.log('VideoSR initialization complete');
+    sendBackendLog('info', 'VideoSR WebUI 初始化完成', 'system');
 });
 
 // ==========================================
@@ -156,23 +361,33 @@ function updateThemeIcon(theme) {
 // 模式切换（视频/图片）
 // ==========================================
 function initModeSwitch() {
-    console.log('Initializing mode switch...');
+    console.log('initModeSwitch() called');
+    console.log('videoModeBtn:', Elements.videoModeBtn);
+    console.log('imageModeBtn:', Elements.imageModeBtn);
     
     if (Elements.videoModeBtn) {
         Elements.videoModeBtn.addEventListener('click', function() {
+            console.log('Video mode button clicked');
             switchMode('video');
         });
+    } else {
+        console.error('videoModeBtn not found!');
     }
     
     if (Elements.imageModeBtn) {
         Elements.imageModeBtn.addEventListener('click', function() {
+            console.log('Image mode button clicked');
             switchMode('image');
         });
+    } else {
+        console.error('imageModeBtn not found!');
     }
 }
 
 function switchMode(mode) {
-    console.log('Switching to mode:', mode);
+    console.log('switchMode() called with mode:', mode);
+    sendBackendLog('event', 'switchMode: ' + mode, 'mode-switch');
+    Logger.info(`切换模式: ${mode === 'video' ? '视频超分' : '图片超分'}`);
     AppState.mode = mode;
     
     // 更新按钮状态
@@ -186,12 +401,14 @@ function switchMode(mode) {
         if (Elements.uploadBtnText) Elements.uploadBtnText.textContent = '选择视频文件';
         if (Elements.heroSubtitle) Elements.heroSubtitle.textContent = '免费、开源、隐私安全 - 在浏览器中直接使用AI增强您的视频画质';
         AppState.settings.format = 'mp4';
+        Logger.input('模式: 视频超分, 格式: MP4');
     } else {
         if (Elements.uploadTitle) Elements.uploadTitle.textContent = '拖拽图片到这里';
         if (Elements.uploadFormats) Elements.uploadFormats.textContent = '支持格式: JPG, PNG, WebP, BMP, TIFF';
         if (Elements.uploadBtnText) Elements.uploadBtnText.textContent = '选择图片文件';
         if (Elements.heroSubtitle) Elements.heroSubtitle.textContent = '免费、开源、隐私安全 - 在浏览器中直接使用AI增强您的图片画质';
         AppState.settings.format = 'png';
+        Logger.input('模式: 图片超分, 格式: PNG');
     }
     
     // 重置上传状态
@@ -281,29 +498,33 @@ function initUpload() {
 }
 
 async function handleFileSelect(file) {
-    console.log('Handling file select:', file.name, file.size, file.type);
+    Logger.input(`选择文件: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB, ${file.type})`);
     
     // 验证文件类型
     const isVideo = file.type && file.type.startsWith('video/');
     const isImage = file.type && file.type.startsWith('image/');
     
     if (!isVideo && !isImage) {
+        Logger.error('文件类型无效: ' + file.type);
         showToast('error', '请选择有效的视频或图片文件');
         return;
     }
     
     // 验证模式匹配
     if (AppState.mode === 'video' && !isVideo) {
+        Logger.error('模式不匹配: 当前为视频模式，但选择了图片文件');
         showToast('error', '当前为视频模式，请选择视频文件');
         return;
     }
     if (AppState.mode === 'image' && !isImage) {
+        Logger.error('模式不匹配: 当前为图片模式，但选择了视频文件');
         showToast('error', '当前为图片模式，请选择图片文件');
         return;
     }
     
     // 验证文件大小 (500MB)
     if (file.size > 500 * 1024 * 1024) {
+        Logger.error(`文件过大: ${(file.size / 1024 / 1024).toFixed(2)} MB > 500 MB`);
         showToast('error', '文件大小超过500MB限制');
         return;
     }
@@ -318,21 +539,24 @@ async function handleFileSelect(file) {
         const formData = new FormData();
         formData.append(AppState.mode === 'video' ? 'video' : 'image', file);
         
-        console.log('Uploading to:', API_BASE + '/api/upload');
+        Logger.info(`开始上传到服务器: ${API_BASE}/api/upload`);
         
         const response = await fetch(API_BASE + '/api/upload', {
             method: 'POST',
             body: formData
         });
         
-        console.log('Upload response status:', response.status);
+        Logger.info(`服务器响应: HTTP ${response.status}`);
         
         const result = await response.json();
-        console.log('Upload result:', result);
+        Logger.output(`上传结果: ${JSON.stringify(result).substring(0, 200)}`);
         
         if (!response.ok || !result.success) {
             throw new Error(result.message || '上传失败');
         }
+        
+        AppState.uploadedFilePath = result.filePath;
+        Logger.success(`文件上传成功: ${result.filePath}`);
         
         hideLoading();
         
@@ -343,13 +567,14 @@ async function handleFileSelect(file) {
         
     } catch (error) {
         hideLoading();
-        console.error('Upload error:', error);
+        Logger.error(`上传失败: ${error.message}`);
         showToast('error', '上传失败: ' + error.message);
     }
 }
 
 function showPreview(file, uploadResult) {
     console.log('Showing preview for mode:', AppState.mode);
+    sendBackendLog('event', 'showPreview: ' + AppState.mode, 'preview');
     
     // 隐藏上传区域
     if (Elements.uploadArea) {
@@ -357,7 +582,7 @@ function showPreview(file, uploadResult) {
     }
     
     if (AppState.mode === 'video') {
-        // 显示视频预览
+        // 显示视频预览（对比模式）
         if (Elements.videoPreviewSection) {
             Elements.videoPreviewSection.style.display = 'block';
         }
@@ -366,22 +591,32 @@ function showPreview(file, uploadResult) {
         }
         
         // 设置原始视频预览
-        if (Elements.originalVideo) {
-            const objectUrl = URL.createObjectURL(file);
-            Elements.originalVideo.src = objectUrl;
-            Elements.originalVideo.load();
+        var origVideo = document.getElementById('originalVideo');
+        if (origVideo) {
+            var objectUrl = URL.createObjectURL(file);
+            origVideo.src = objectUrl;
+            origVideo.load();
         }
         
+        // 隐藏结果视频（等待处理完成），但隐藏占位符让原视频可见
+        var resultVideo = document.getElementById('resultVideo');
+        if (resultVideo) resultVideo.style.display = 'none';
+        var placeholder = document.getElementById('videoComparePlaceholder');
+        if (placeholder) placeholder.style.display = 'none';
+        var compareResult = document.getElementById('videoCompareResult');
+        if (compareResult) compareResult.style.display = 'none';
+        
+        // 重置滑动条到中间
+        initCompareSlider('video');
+        
         // 显示视频信息
-        const fileSize = formatFileSize(file.size);
-        if (Elements.originalVideoInfo) {
-            Elements.originalVideoInfo.innerHTML = `
-                <div>文件名: ${file.name}</div>
-                <div>文件大小: ${fileSize}</div>
-            `;
+        var fileSize = formatFileSize(file.size);
+        var origInfo = document.getElementById('originalVideoInfo');
+        if (origInfo) {
+            origInfo.innerHTML = '<div>文件名: ' + file.name + '</div><div>文件大小: ' + fileSize + '</div>';
         }
     } else {
-        // 显示图片预览
+        // 显示图片预览（对比模式）
         if (Elements.imagePreviewSection) {
             Elements.imagePreviewSection.style.display = 'block';
         }
@@ -390,21 +625,41 @@ function showPreview(file, uploadResult) {
         }
         
         // 设置原始图片预览
-        if (Elements.originalImage) {
-            const objectUrl = URL.createObjectURL(file);
-            Elements.originalImage.src = objectUrl;
+        var origImage = document.getElementById('originalImage');
+        if (origImage) {
+            // 释放旧的 Object URL
+            if (origImage.src && origImage.src.startsWith('blob:')) {
+                URL.revokeObjectURL(origImage.src);
+            }
+            var objectUrl = URL.createObjectURL(file);
+            origImage.src = objectUrl;
+            origImage.style.display = 'block';
+            console.log('Original image set:', objectUrl);
         }
         
+        // 立即显示对比滑动条：左右都显示原始图片
+        var resultImage = document.getElementById('resultImage');
+        if (resultImage && origImage) {
+            resultImage.src = origImage.src;
+            resultImage.style.display = 'block';
+        }
+        var placeholder = document.getElementById('imageComparePlaceholder');
+        if (placeholder) placeholder.style.display = 'none';
+        var compareResult = document.getElementById('imageCompareResult');
+        if (compareResult) compareResult.style.display = 'block';
+        var container = document.getElementById('imageCompareContainer');
+        if (container) container.classList.add('comparing');
+        
+        // 重置滑动条到中间
+        initCompareSlider('image');
+        
         // 显示图片信息
-        const fileSize = formatFileSize(file.size);
-        const img = new Image();
+        var fileSize = formatFileSize(file.size);
+        var img = new Image();
         img.onload = function() {
-            if (Elements.originalImageInfo) {
-                Elements.originalImageInfo.innerHTML = `
-                    <div>文件名: ${file.name}</div>
-                    <div>文件大小: ${fileSize}</div>
-                    <div>尺寸: ${img.width} × ${img.height} 像素</div>
-                `;
+            var origInfo = document.getElementById('originalImageInfo');
+            if (origInfo) {
+                origInfo.innerHTML = '<div>文件名: ' + file.name + '</div><div>文件大小: ' + fileSize + '</div><div>尺寸: ' + img.width + ' × ' + img.height + ' 像素</div>';
             }
         };
         img.src = URL.createObjectURL(file);
@@ -415,9 +670,9 @@ function showPreview(file, uploadResult) {
         Elements.settingsPanel.style.display = 'block';
     }
     
-    // 显示操作区域
-    if (Elements.actionSection) {
-        Elements.actionSection.style.display = 'block';
+    // 显示操作面板（右侧）
+    if (Elements.actionPanel) {
+        Elements.actionPanel.style.display = 'flex';
     }
     
     // 更新格式选择显示
@@ -468,14 +723,20 @@ function resetToUpload() {
         Elements.imagePreviewSection.style.display = 'none';
     }
     
+    // 移除对比模式
+    var videoContainer = document.getElementById('videoCompareContainer');
+    if (videoContainer) videoContainer.classList.remove('comparing');
+    var imageContainer = document.getElementById('imageCompareContainer');
+    if (imageContainer) imageContainer.classList.remove('comparing');
+    
     // 隐藏设置面板
     if (Elements.settingsPanel) {
         Elements.settingsPanel.style.display = 'none';
     }
     
-    // 隐藏操作区域
-    if (Elements.actionSection) {
-        Elements.actionSection.style.display = 'none';
+    // 隐藏操作面板（右侧）
+    if (Elements.actionPanel) {
+        Elements.actionPanel.style.display = 'none';
     }
     if (Elements.progressSection) {
         Elements.progressSection.style.display = 'none';
@@ -620,28 +881,48 @@ function updateFormatDisplay() {
 // ==========================================
 function initActions() {
     console.log('Initializing actions...');
+    sendBackendLog('info', 'initActions() called', 'system');
     
     if (Elements.startBtn) {
-        Elements.startBtn.addEventListener('click', startProcessing);
+        Elements.startBtn.addEventListener('click', function() {
+            console.log('startBtn clicked');
+            sendBackendLog('click', 'startBtn clicked', 'button');
+            startProcessing();
+        });
     }
     
     if (Elements.cancelBtn) {
-        Elements.cancelBtn.addEventListener('click', cancelProcessing);
+        Elements.cancelBtn.addEventListener('click', function() {
+            console.log('cancelBtn clicked');
+            sendBackendLog('click', 'cancelBtn clicked', 'button');
+            cancelProcessing();
+        });
     }
     
     if (Elements.downloadBtn) {
-        Elements.downloadBtn.addEventListener('click', downloadResult);
+        Elements.downloadBtn.addEventListener('click', function() {
+            console.log('downloadBtn clicked');
+            sendBackendLog('click', 'downloadBtn clicked', 'button');
+            downloadResult();
+        });
     }
     
     if (Elements.newVideoBtn) {
-        Elements.newVideoBtn.addEventListener('click', resetToUpload);
+        Elements.newVideoBtn.addEventListener('click', function() {
+            console.log('newVideoBtn clicked');
+            sendBackendLog('click', 'newVideoBtn clicked', 'button');
+            resetToUpload();
+        });
     }
 }
 
 async function startProcessing() {
-    console.log('Starting processing...', AppState.uploadedFilePath);
+    Logger.info(`开始处理: ${AppState.mode === 'video' ? '视频' : '图片'}超分`);
+    Logger.input(`输入文件: ${AppState.uploadedFilePath}`);
+    Logger.input(`处理设置: 放大${AppState.settings.scale}x, 模型=${AppState.settings.model}, 降噪=${AppState.settings.denoise}, NPU=${AppState.settings.useNpu ? '开启' : '关闭'}`);
     
     if (!AppState.uploadedFilePath) {
+        Logger.error('未上传文件');
         showToast('error', '请先上传' + (AppState.mode === 'video' ? '视频' : '图片'));
         return;
     }
@@ -665,6 +946,9 @@ async function startProcessing() {
             settings: AppState.settings
         };
         
+        Logger.info(`发送处理请求: ${API_BASE}/api/process`);
+        Logger.output(`请求体: ${JSON.stringify(requestBody).substring(0, 200)}`);
+        
         const response = await fetch(API_BASE + '/api/process', {
             method: 'POST',
             headers: {
@@ -674,6 +958,7 @@ async function startProcessing() {
         });
         
         const result = await response.json();
+        Logger.output(`处理响应: ${JSON.stringify(result).substring(0, 200)}`);
         
         if (!response.ok || !result.success) {
             throw new Error(result.message || '启动处理失败');
@@ -682,11 +967,13 @@ async function startProcessing() {
         AppState.currentTaskId = result.taskId;
         AppState.isProcessing = true;
         
+        Logger.success(`任务已创建: ${result.taskId}`);
+        
         // 开始轮询进度
         startProgressPolling();
         
     } catch (error) {
-        console.error('Start processing error:', error);
+        Logger.error(`启动处理失败: ${error.message}`);
         showToast('error', '启动失败: ' + error.message);
         if (Elements.startBtn) {
             Elements.startBtn.disabled = false;
@@ -699,7 +986,7 @@ async function startProcessing() {
 }
 
 function startProgressPolling() {
-    console.log('Starting progress polling...');
+    Logger.info('开始轮询任务进度...');
     
     if (AppState.progressInterval) {
         clearInterval(AppState.progressInterval);
@@ -717,7 +1004,7 @@ function startProgressPolling() {
             }
             
             const task = result.task;
-            console.log('Progress update:', task.status, task.progress + '%');
+            Logger.info(`进度更新: ${task.status}, ${task.progress}%`);
             
             updateProgress(task);
             
@@ -727,14 +1014,17 @@ function startProgressPolling() {
                 AppState.progressInterval = null;
                 AppState.isProcessing = false;
                 
-                console.log('Task finished with status:', task.status);
+                Logger.info(`任务结束: ${task.status}`);
                 
                 if (task.status === 'completed') {
+                    Logger.success(`处理完成: 输出文件=${task.outputPath}, 分辨率=${task.outputResolution}, 耗时=${task.processingTime}秒`);
                     showCompletion(task);
                 } else if (task.status === 'cancelled') {
+                    Logger.warn('任务已取消');
                     showToast('info', '处理已取消');
                     resetToUpload();
                 } else {
+                    Logger.error(`处理失败: ${task.error || '未知错误'}`);
                     showError(task);
                 }
             }
@@ -782,6 +1072,7 @@ function updateProgress(task) {
 
 function showCompletion(task) {
     console.log('Showing completion', task);
+    sendBackendLog('event', 'showCompletion: ' + (AppState.mode === 'video' ? 'video' : 'image'), 'completion');
     
     if (Elements.progressSection) {
         Elements.progressSection.style.display = 'none';
@@ -791,7 +1082,7 @@ function showCompletion(task) {
     }
     
     const outputPath = task.outputPath || '';
-    const fileName = outputPath.split('/').pop().split('\').pop() || 'output';
+    const fileName = outputPath.split('/').pop().split('\\').pop() || 'output';
     const fileUrl = API_BASE + '/outputs/' + fileName;
     
     console.log('Output file:', fileName);
@@ -805,28 +1096,35 @@ function showCompletion(task) {
     }
     
     if (AppState.mode === 'video') {
-        // 显示结果视频（使用预览URL）
-        if (Elements.resultVideo) {
-            Elements.resultVideo.src = fileUrl;
-            Elements.resultVideo.style.display = 'block';
-        }
-        if (Elements.videoResultPlaceholder) {
-            Elements.videoResultPlaceholder.style.display = 'none';
+        // 显示结果视频（对比模式）
+        var container = document.getElementById('videoCompareContainer');
+        if (container) container.classList.add('comparing');
+        
+        var resultVideo = document.getElementById('resultVideo');
+        if (resultVideo) {
+            resultVideo.onloadeddata = function() {
+                var placeholder = document.getElementById('videoComparePlaceholder');
+                if (placeholder) placeholder.style.display = 'none';
+                initCompareSlider('video');
+            };
+            resultVideo.src = fileUrl;
         }
     } else {
-        // 显示结果图片（使用预览URL）
-        if (Elements.resultImage) {
-            Elements.resultImage.src = fileUrl;
-            Elements.resultImage.onload = function() {
-                console.log('Result image loaded successfully');
+        // 显示结果图片（对比模式）
+        var container = document.getElementById('imageCompareContainer');
+        if (container) container.classList.add('comparing');
+        
+        var resultImage = document.getElementById('resultImage');
+        if (resultImage) {
+            resultImage.onload = function() {
+                var placeholder = document.getElementById('imageComparePlaceholder');
+                if (placeholder) placeholder.style.display = 'none';
+                initCompareSlider('image');
             };
-            Elements.resultImage.onerror = function() {
+            resultImage.onerror = function() {
                 console.error('Failed to load result image:', fileUrl);
             };
-            Elements.resultImageWrapper.style.display = 'block';
-        }
-        if (Elements.imageResultPlaceholder) {
-            Elements.imageResultPlaceholder.style.display = 'none';
+            resultImage.src = fileUrl;
         }
     }
     
@@ -1043,3 +1341,84 @@ function hideLoading() {
 }
 
 console.log('VideoSR app.js loaded');
+
+// ==========================================
+// 对比滑动条功能
+// ==========================================
+var compareSliders = {};
+
+function initCompareSlider(type) {
+    // type: 'image' or 'video'
+    var container = document.getElementById(type + 'CompareContainer');
+    var slider = document.getElementById(type + 'CompareSlider');
+    var resultDiv = document.getElementById(type + 'CompareResult');
+    
+    if (!container || !slider || !resultDiv) {
+        console.warn('Compare slider elements not found for type:', type);
+        return;
+    }
+    
+    // 等待容器渲染完成后再计算宽度
+    function setSliderPosition() {
+        var rect = container.getBoundingClientRect();
+        var containerWidth = rect.width;
+        if (containerWidth === 0) {
+            // 如果容器还没渲染，等待一帧再试
+            requestAnimationFrame(setSliderPosition);
+            return;
+        }
+        var initialLeft = containerWidth / 2;
+        slider.style.left = initialLeft + 'px';
+        resultDiv.style.width = (containerWidth - initialLeft) + 'px';
+        console.log('Compare slider initialized:', type, 'width:', containerWidth);
+    }
+    
+    requestAnimationFrame(setSliderPosition);
+    
+    // 如果已经初始化过，不再重复绑定
+    if (compareSliders[type]) return;
+    
+    compareSliders[type] = true;
+    
+    var isDragging = false;
+    
+    function onDragStart(e) {
+        isDragging = true;
+        e.preventDefault();
+        sendBackendLog('event', 'compare drag start: ' + type, 'compare');
+    }
+    
+    function onDragMove(e) {
+        if (!isDragging) return;
+        var clientX;
+        if (e.touches) {
+            clientX = e.touches[0].clientX;
+        } else {
+            clientX = e.clientX;
+        }
+        
+        var rect = container.getBoundingClientRect();
+        var x = clientX - rect.left;
+        x = Math.max(20, Math.min(x, rect.width - 20));
+        
+        slider.style.left = x + 'px';
+        resultDiv.style.width = (rect.width - x) + 'px';
+    }
+    
+    function onDragEnd() {
+        isDragging = false;
+    }
+    
+    // 鼠标事件
+    slider.addEventListener('mousedown', onDragStart);
+    document.addEventListener('mousemove', onDragMove);
+    document.addEventListener('mouseup', onDragEnd);
+    
+    // 触摸事件
+    slider.addEventListener('touchstart', onDragStart, {passive: false});
+    document.addEventListener('touchmove', onDragMove, {passive: false});
+    document.addEventListener('touchend', onDragEnd);
+    
+    console.log('Compare slider initialized for:', type);
+    sendBackendLog('info', 'Compare slider initialized: ' + type, 'compare');
+}

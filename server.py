@@ -1,7 +1,8 @@
 """
-VideoSR WebUI - 后端服务（支持视频+图片超分）
+VideoSR WebUI - 后端服务（支持视频+图片超分，NPU加速）
 提供文件上传、超分辨率处理、任务管理、结果下载等功能
 支持NPU加速（Qualcomm Hexagon NPU）
+集成 Real-ESRGAN x4plus 模型（来自 video-sr-npu Skill）
 """
 
 from flask import Flask, request, jsonify, send_file
@@ -13,11 +14,15 @@ from pathlib import Path
 from datetime import datetime
 import os
 import sys
+import numpy as np
+import cv2
+from PIL import Image
 
 # 配置
 BASE_DIR = Path(__file__).parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 OUTPUT_DIR = BASE_DIR / "outputs"
+MODELS_DIR = BASE_DIR / "models"
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
 ALLOWED_VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv'}
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp', '.gif'}
@@ -37,6 +42,7 @@ logger = logging.getLogger(__name__)
 # 创建必要目录
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
+MODELS_DIR.mkdir(exist_ok=True)
 
 # 全局任务管理
 tasks = {}
@@ -54,100 +60,249 @@ def serve_output(filename):
     return send_file(str(OUTPUT_DIR / filename))
 
 # ==========================================
-# NPU处理模块（参考QAIbuilder）
+# Real-ESRGAN NPU 超分引擎（来自 video-sr-npu Skill）
 # ==========================================
-class NPUVideoSR:
-    """NPU超分处理器（使用Qualcomm QNN）"""
+
+MODEL_ID = "mnz1l2exq"
+MODEL_NAME = "real_esrgan_x4plus"
+IMAGE_SIZE = 512
+SCALE = 4
+
+class NPUSuperResEngine:
+    """NPU super-resolution engine - load once, upsample many frames."""
     
     def __init__(self):
         self.npu_available = False
-        self.qnn_context = None
-        self._check_npu_availability()
+        self.model = None
+        self._init_npu()
     
-    def _check_npu_availability(self):
-        """检查NPU是否可用"""
+    def _init_npu(self):
+        """初始化 NPU 引擎"""
         try:
-            # 尝试导入QAI AppBuilder
             import qai_appbuilder
-            from qai_appbuilder import QNNContext, Runtime, LogLevel, QNNConfig
-            self.npu_available = True
-            self.qai_appbuilder = qai_appbuilder
-            print("✓ NPU (Qualcomm QNN) 可用")
-        except ImportError:
-            print("⚠ NPU不可用，将使用CPU模拟模式")
-            self.npu_available = False
-    
-    def init_model(self, model_name='real_esrgan_x4plus', scale=4):
-        """初始化NPU模型"""
-        if not self.npu_available:
-            print("使用CPU模式进行超分")
-            return False
-        
-        try:
-            from qai_appbuilder import QNNContext, Runtime, LogLevel, QNNConfig, PerfProfile
+            from qai_appbuilder import QNNContext, QNNConfig, Runtime, LogLevel, ProfilingLevel, PerfProfile
             
-            # 配置QNN环境（参考QAIbuilder）
-            qnn_dir = Path("qai_libs")
-            if not qnn_dir.exists():
-                print(f"⚠ QNN库目录不存在: {qnn_dir}")
-                return False
+            # 下载模型（如果不存在）
+            model_path = self._download_model()
+            if not model_path:
+                print("⚠ 模型下载失败，将使用CPU模式")
+                return
             
-            QNNConfig.Config(str(qnn_dir), Runtime.HTP, LogLevel.WARN, PerfProfile.BASIC)
+            # 配置 QNN 环境
+            qnn_libs_dir = os.path.join(
+                os.path.dirname(qai_appbuilder.__file__), "libs"
+            )
+            QNNConfig.Config(qnn_libs_dir, Runtime.HTP, LogLevel.WARN, ProfilingLevel.BASIC)
             
             # 加载模型
-            model_dir = Path("models") / model_name
-            if not model_dir.exists():
-                print(f"⚠ 模型目录不存在: {model_dir}")
-                return False
+            self.model = QNNContext("realesrgan", model_path)
+            self.npu_available = True
+            self.PerfProfile = PerfProfile
+            print("✓ NPU (Qualcomm QNN) 可用，模型加载成功")
             
-            model_path = model_dir / f"{model_name}.bin"
-            if not model_path.exists():
-                print(f"⚠ 模型文件不存在: {model_path}")
-                return False
-            
-            # 创建QNN上下文
-            self.qnn_context = QNNContext(model_name, str(model_path), deviceID=0, coreIdsStr="0")
-            
-            print(f"✓ NPU模型加载成功: {model_name}")
-            return True
-            
+        except ImportError:
+            print("⚠ qai_appbuilder 未安装，将使用CPU模拟模式")
+            self.npu_available = False
         except Exception as e:
-            print(f"✗ NPU模型初始化失败: {e}")
-            return False
+            print(f"⚠ NPU初始化失败: {e}，将使用CPU模拟模式")
+            self.npu_available = False
     
-    def process_frame(self, frame):
-        """处理单帧（使用NPU）"""
-        if not self.npu_available or not self.qnn_context:
-            # 模拟处理
-            return frame
+    def _download_model(self):
+        """下载 Real-ESRGAN 模型"""
+        model_path = MODELS_DIR / f"{MODEL_NAME}.bin"
+        if model_path.exists():
+            print(f"[OK] 模型已缓存: {model_path}")
+            return str(model_path)
         
         try:
-            import numpy as np
+            import qai_hub
+            from pathlib import Path
             
-            # 预处理
-            img = frame / 255.0  # 归一化
-            img = np.transpose(img, (2, 0, 1))  # HWC -> CHW
-            img = np.expand_dims(img, axis=0)  # 添加batch维度
+            print(f"[...] 下载 {MODEL_NAME} 模型...", flush=True)
             
-            # NPU推理
-            from qai_appbuilder import PerfProfile
-            PerfProfile.SetPerfProfileGlobal(PerfProfile.BURST)
-            output = self.qnn_context.Inference([img])[0]
-            PerfProfile.RelPerfProfileGlobal()
+            # 配置 qai-hub token
+            HUB_TOKEN = "a916bc04400e033f60fdd73c615e5780e2ba206a"
+            hub_config_dir = Path.home() / ".qai_hub"
+            hub_config = hub_config_dir / "client.ini"
             
-            # 后处理
-            output = np.clip(output[0], 0, 1) * 255.0
-            output = np.transpose(output, (1, 2, 0))  # CHW -> HWC
-            output = output.astype(np.uint8)
+            # 保存原有配置（如果有）
+            saved_config = None
+            if hub_config.exists():
+                saved_config = hub_config.read_text(encoding='utf-8')
             
-            return output
+            try:
+                import subprocess
+                subprocess.run(["qai-hub", "configure", "--api_token", HUB_TOKEN],
+                              capture_output=True, shell=True, check=True)
+                
+                model = qai_hub.get_model(MODEL_ID)
+                model.download(filename=str(model_path))
+                print(f"[OK] 模型下载成功: {model_path}")
+                
+            finally:
+                # 恢复原有配置
+                if saved_config:
+                    hub_config.write_text(saved_config, encoding='utf-8')
+            
+            return str(model_path) if model_path.exists() else None
             
         except Exception as e:
-            print(f"NPU处理帧失败: {e}")
-            return frame
+            print(f"[ERR] 模型下载失败: {e}")
+            return None
+    
+    def upsample(self, frame_bgr):
+        """
+        使用 NPU 进行超分
+        frame_bgr: BGR numpy array (H, W, 3)
+        returns: BGR numpy array at 4x resolution
+        """
+        if not self.npu_available or not self.model:
+            # CPU 模拟模式：使用 bicubic 插值
+            h, w = frame_bgr.shape[:2]
+            new_h, new_w = h * SCALE, w * SCALE
+            return cv2.resize(frame_bgr, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+        
+        # NPU 推理
+        from qai_appbuilder import PerfProfile
+        
+        # BGR -> RGB
+        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        orig_image = Image.fromarray(rgb)
+        orig_w, orig_h = orig_image.size
+        
+        # Resize + pad to 512x512
+        image, scale, padding = self._resize_pad(orig_image, (IMAGE_SIZE, IMAGE_SIZE))
+        
+        # 预处理
+        image_np = np.array(image).astype(np.float32)
+        image_np = np.clip(image_np, 0, 255) / 255.0
+        image_np = np.expand_dims(image_np, axis=0)
+        
+        # NPU 推理
+        self.PerfProfile.SetPerfProfileGlobal(PerfProfile.BURST)
+        output = self.model.Inference([image_np])[0]
+        self.PerfProfile.RelPerfProfileGlobal()
+        
+        # 后处理
+        output = output.reshape(IMAGE_SIZE * SCALE, IMAGE_SIZE * SCALE, 3)
+        output = np.clip(output, 0.0, 1.0)
+        output = (output * 255).astype(np.uint8)
+        output_image = Image.fromarray(output)
+        
+        # Undo resize + pad
+        new_size = (orig_w * SCALE, orig_h * SCALE)
+        new_padding = (padding[0] * SCALE, padding[1] * SCALE)
+        final_image = self._undo_resize_pad(output_image, new_size, scale, new_padding)
+        
+        # RGB -> BGR
+        final_rgb = np.array(final_image)
+        final_bgr = cv2.cvtColor(final_rgb, cv2.COLOR_RGB2BGR)
+        return final_bgr
+    
+    def _resize_pad(self, image, dst_size):
+        """Resize and pad image to dst_size"""
+        transform = transforms.Compose([transforms.PILToTensor()])
+        img = transform(image).float().unsqueeze(0)
+        
+        height, width = img.shape[-2:]
+        dst_h, dst_w = dst_size
+        h_ratio = dst_h / height
+        w_ratio = dst_w / width
+        scale = min(h_ratio, w_ratio)
+        
+        new_h = int(height * scale)
+        new_w = int(width * scale)
+        pad_h = dst_h - new_h
+        pad_w = dst_w - new_w
+        pad_top = pad_h // 2
+        pad_bottom = pad_h // 2 + pad_h % 2
+        pad_left = pad_w // 2
+        pad_right = pad_w // 2 + pad_w % 2
+        
+        rescaled = torch_interpolate(img, size=[new_h, new_w], mode="bilinear")
+        padded = torch_pad(rescaled, (pad_left, pad_right, pad_top, pad_bottom), mode="constant")
+        
+        # Convert back to PIL
+        padded_img = padded[0]
+        padded_img = torch.clip(padded_img, min=0.0, max=1.0)
+        np_out = (padded_img.permute(1, 2, 0).detach().numpy() * 255).astype(np.uint8)
+        return Image.fromarray(np_out), scale, (pad_left, pad_top)
+    
+    def _undo_resize_pad(self, image, orig_size_wh, scale, padding):
+        """Undo resize and pad"""
+        transform = transforms.Compose([transforms.PILToTensor()])
+        img = transform(image).float().unsqueeze(0)
+        
+        w, h = orig_size_wh
+        rescaled = torch_interpolate(img, scale_factor=1/scale, mode="bilinear")
+        scaled_pad = [int(round(padding[0]/scale)), int(round(padding[1]/scale))]
+        cropped = rescaled[..., scaled_pad[1]:scaled_pad[1]+h, scaled_pad[0]:scaled_pad[0]+w]
+        
+        # Convert back to PIL
+        cropped_img = cropped[0]
+        cropped_img = torch.clip(cropped_img, min=0.0, max=1.0)
+        np_out = (cropped_img.permute(1, 2, 0).detach().numpy() * 255).astype(np.uint8)
+        return Image.fromarray(np_out)
 
-# 全局NPU处理器
-npu_processor = NPUVideoSR()
+# 全局 NPU 引擎
+npu_engine = NPUSuperResEngine()
+
+# ==========================================
+# 光流运动补偿插值（来自 video-sr-npu Skill）
+# ==========================================
+
+def compute_bidirectional_flow(prev_orig, next_orig):
+    """计算双向光流"""
+    prev_gray = cv2.cvtColor(prev_orig, cv2.COLOR_BGR2GRAY)
+    next_gray = cv2.cvtColor(next_orig, cv2.COLOR_BGR2GRAY)
+    
+    flow_fwd = cv2.calcOpticalFlowFarneback(
+        prev_gray, next_gray, None,
+        0.5, 3, 15, 3, 5, 1.2, 0
+    )
+    flow_bwd = cv2.calcOpticalFlowFarneback(
+        next_gray, prev_gray, None,
+        0.5, 3, 15, 3, 5, 1.2, 0
+    )
+    return flow_fwd, flow_bwd
+
+def upscale_flow(flow, scale):
+    """上采样光流场"""
+    h, w = flow.shape[:2]
+    new_h, new_w = h * scale, w * scale
+    flow_up = cv2.resize(flow, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+    flow_up[:, :, 0] *= scale
+    flow_up[:, :, 1] *= scale
+    return flow_up
+
+def motion_compensated_interpolation(sr_prev, sr_next, orig_prev, orig_next, scale=SCALE):
+    """运动补偿插值生成中间帧"""
+    # 计算光流
+    flow_fwd, flow_bwd = compute_bidirectional_flow(orig_prev, orig_next)
+    
+    # 上采样光流
+    flow_fwd_sr = upscale_flow(flow_fwd, scale)
+    flow_bwd_sr = upscale_flow(flow_bwd, scale)
+    
+    # 构建坐标网格
+    h_sr, w_sr = sr_prev.shape[:2]
+    y_coords, x_coords = np.mgrid[0:h_sr, 0:w_sr].astype(np.float32)
+    
+    # 前向扭曲
+    map_x_prev = x_coords - 0.5 * flow_fwd_sr[:, :, 0]
+    map_y_prev = y_coords - 0.5 * flow_fwd_sr[:, :, 1]
+    warped_prev = cv2.remap(sr_prev, map_x_prev, map_y_prev,
+                           cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+    
+    # 后向扭曲
+    map_x_next = x_coords - 0.5 * flow_bwd_sr[:, :, 0]
+    map_y_next = y_coords - 0.5 * flow_bwd_sr[:, :, 1]
+    warped_next = cv2.remap(sr_next, map_x_next, map_y_next,
+                           cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+    
+    # 融合
+    mid = cv2.addWeighted(warped_prev, 0.5, warped_next, 0.5, 0)
+    return mid
 
 # ==========================================
 # 工具函数
@@ -204,10 +359,10 @@ def create_task(file_path, settings, task_type='video'):
     return task_id, task
 
 # ==========================================
-# 视频超分处理（NPU加速版）
+# 图片超分处理（真实 AI 超分）
 # ==========================================
-def process_video_task(task_id):
-    """视频超分处理任务（NPU加速版）"""
+def process_image_task(task_id):
+    """图片超分处理任务（使用 Real-ESRGAN）"""
     task = get_task(task_id)
     if not task:
         return
@@ -221,226 +376,65 @@ def process_video_task(task_id):
         
         file_path = task['filePath']
         settings = task['settings']
-        use_npu = settings.get('useNpu', True)
-        
-        # 初始化NPU（如果需要）
-        if use_npu and npu_processor.npu_available:
-            print(f"任务 {task_id}: 使用NPU加速")
-        else:
-            print(f"任务 {task_id}: 使用CPU模式")
-        
-        # 模拟：获取视频信息
-        time.sleep(1)
-        update_task(task_id, status='preprocessing', progress=5)
-        
-        # 模拟：视频分解（提取帧）
-        total_frames = 100  # 模拟总帧数
-        update_task(task_id, 
-                   status='processing',
-                   progress=10,
-                   totalFrames=total_frames)
-        
-        # 模拟：逐帧超分处理
-        for i in range(total_frames):
-            current_task = get_task(task_id)
-            if current_task and current_task.get('cancelled'):
-                update_task(task_id, status='cancelled')
-                return
-                
-            progress = 10 + int(80 * (i + 1) / total_frames)
-            update_task(task_id,
-                       status='processing',
-                       progress=progress,
-                       processedFrames=i + 1,
-                       eta=int((total_frames - i - 1) * 0.5))
-            
-            # 如果使用NPU，这里应该调用npu_processor.process_frame()
-            if use_npu and npu_processor.npu_available:
-                pass
-            
-            time.sleep(0.1)
-        
-        # 模拟：视频重建
-        update_task(task_id, status='postprocessing', progress=90)
-        time.sleep(1)
-        
-        # 模拟：生成输出文件
         scale = settings.get('scale', 4)
-        fmt = settings.get('format', 'mp4')
-        output_filename = f"videosr_{task_id}_{scale}x.{fmt}"
-        output_path = OUTPUT_DIR / output_filename
         
-        # 创建占位文件（实际应该生成真实的超分视频）
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(f"VideoSR Processed Video\n")
-            f.write(f"Task: {task_id}\n")
-            f.write(f"Settings: {settings}\n")
+        # 读取原始图片
+        update_task(task_id, status='preprocessing', progress=10)
+        
+        with Image.open(file_path) as img:
+            # 转换为RGB
+            if img.mode in ('RGBA', 'P', 'LA'):
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                if 'A' in img.mode:
+                    background.paste(img, mask=img.split()[-1])
+                else:
+                    background.paste(img)
+                img = background
+            elif img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            orig_w, orig_h = img.size
+            update_task(task_id, status='processing', progress=20)
+            
+            # 使用 NPU 引擎进行超分
+            # 将 PIL Image 转换为 BGR numpy array
+            rgb_array = np.array(img)
+            bgr_array = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2BGR)
+            
+            update_task(task_id, status='processing', progress=30)
+            
+            # NPU 超分
+            sr_bgr = npu_engine.upsample(bgr_array)
+            
+            update_task(task_id, status='processing', progress=80)
+            
+            # BGR -> RGB -> PIL
+            sr_rgb = cv2.cvtColor(sr_bgr, cv2.COLOR_BGR2RGB)
+            sr_img = Image.fromarray(sr_rgb)
+            
+            update_task(task_id, status='postprocessing', progress=90)
+            
+            # 保存输出文件
+            fmt = settings.get('format', 'png')
+            output_filename = f"videosr_{task_id}_{scale}x.{fmt}"
+            output_path = OUTPUT_DIR / output_filename
+            
+            save_kwargs = {}
+            if fmt.lower() in ('jpg', 'jpeg'):
+                save_kwargs['quality'] = 95
+                save_kwargs['optimize'] = True
+            
+            sr_img.save(output_path, **save_kwargs)
         
         # 计算处理时间
         start_time = datetime.fromisoformat(task['startedAt'])
         processing_time = (datetime.now() - start_time).total_seconds()
         
         # 更新任务完成状态
-        out_width = 1920 * scale
-        out_height = 1080 * scale
-        update_task(task_id,
-                   status='completed',
-                   progress=100,
-                   outputPath=str(output_path),
-                   outputResolution=f"{out_width}x{out_height}",
-                   processingTime=processing_time,
-                   completedAt=datetime.now().isoformat())
-        
-    except Exception as e:
-        print(f"Task {task_id} error: {e}")
-        import traceback
-        traceback.print_exc()
-        update_task(task_id, status='failed', error=str(e))
-
-# ==========================================
-# 图片超分处理（NPU加速版）
-# ==========================================
-def process_image_task(task_id):
-    """图片超分处理任务（NPU加速版）"""
-    task = get_task(task_id)
-    if not task:
-        return
-    
-    try:
-        # 更新状态：开始处理
-        update_task(task_id, 
-                   status='preprocessing',
-                   progress=0,
-                   startedAt=datetime.now().isoformat())
-        
-        file_path = task['filePath']
-        settings = task['settings']
-        use_npu = settings.get('useNpu', True)
-        
-        # 初始化NPU（如果需要）
-        if use_npu and npu_processor.npu_available:
-            print(f"图片任务 {task_id}: 使用NPU加速")
-        else:
-            print(f"图片任务 {task_id}: 使用CPU模式")
-        
-        # 模拟：加载图片
-        time.sleep(0.3)
-        update_task(task_id, status='preprocessing', progress=10)
-        
-        # 模拟：超分处理（简化，只循环5次，每次0.5秒）
-        scale = settings.get('scale', 4)
-        for i in range(5):  # 模拟处理进度，总共约2.5秒
-            current_task = get_task(task_id)
-            if current_task and current_task.get('cancelled'):
-                update_task(task_id, status='cancelled')
-                return
-            
-            progress = 10 + int(80 * (i + 1) / 5)
-            update_task(task_id,
-                       status='processing',
-                       progress=progress,
-                       eta=int((5 - i - 1) * 0.5))
-            
-            time.sleep(0.5)
-        
-        # 模拟：后处理
-        update_task(task_id, status='postprocessing', progress=90)
-        time.sleep(0.3)
-        
-        # 生成输出文件
-        fmt = settings.get('format', 'png')
-        output_filename = f"videosr_{task_id}_{scale}x.{fmt}"
-        output_path = OUTPUT_DIR / output_filename
-        
-        logger.info(f"[{task_id}] Generating output image...")
-        logger.info(f"[{task_id}] Input: {file_path}")
-        logger.info(f"[{task_id}] Output: {output_path}")
-        logger.info(f"[{task_id}] Scale: {scale}x, Format: {fmt}")
-        
-        # 生成真实的超分图片（使用Pillow）
-        try:
-            from PIL import Image
-            
-            logger.info(f"[{task_id}] PIL imported successfully")
-            
-            # 读取原始图片
-            with Image.open(file_path) as img:
-                logger.info(f"[{task_id}] Image opened, mode: {img.mode}, size: {img.size}")
-                
-                # 转换为RGB（如果需要）
-                if img.mode in ('RGBA', 'P', 'LA'):
-                    # 对于有透明通道的图片，转换为RGB
-                    logger.info(f"[{task_id}] Converting from {img.mode} to RGB...")
-                    background = Image.new('RGB', img.size, (255, 255, 255))
-                    if img.mode == 'P':
-                        img = img.convert('RGBA')
-                    if 'A' in img.mode:
-                        background.paste(img, mask=img.split()[-1])
-                    else:
-                        background.paste(img)
-                    img = background
-                elif img.mode != 'RGB':
-                    logger.info(f"[{task_id}] Converting from {img.mode} to RGB...")
-                    img = img.convert('RGB')
-                
-                logger.info(f"[{task_id}] Image mode after conversion: {img.mode}")
-                
-                # 获取原始尺寸
-                orig_width, orig_height = img.size
-                new_width = orig_width * scale
-                new_height = orig_height * scale
-                
-                logger.info(f"[{task_id}] Resizing from {orig_width}x{orig_height} to {new_width}x{new_height}")
-                
-                # 使用LANCZOS算法放大（模拟超分）
-                img_upscaled = img.resize((new_width, new_height), Image.LANCZOS)
-                
-                logger.info(f"[{task_id}] Image resized successfully")
-                
-                # 保存放大后的图片
-                save_kwargs = {}
-                if fmt.lower() in ('jpg', 'jpeg'):
-                    save_kwargs['quality'] = 95
-                    save_kwargs['optimize'] = True
-                
-                logger.info(f"[{task_id}] Saving image with kwargs: {save_kwargs}")
-                img_upscaled.save(output_path, **save_kwargs)
-                
-                logger.info(f"[{task_id}] Image saved successfully!")
-                logger.info(f"[{task_id}] Output file size: {output_path.stat().st_size} bytes")
-                
-        except ImportError as e:
-            logger.info(f"[{task_id}] ImportError: {e}")
-            # 如果没有Pillow，创建占位文件
-            logger.info(f"[{task_id}] Pillow not available, creating placeholder")
-            with open(output_path, 'w', encoding='utf-8') as f:
-                f.write(f"VideoSR Processed Image\n")
-                f.write(f"Task: {task_id}\n")
-        except Exception as e:
-            logger.info(f"[{task_id}] Error generating image: {e}")
-            import traceback
-            traceback.print_exc()
-            # 创建占位文件
-            with open(output_path, 'w', encoding='utf-8') as f:
-                f.write(f"VideoSR Processed Image\n")
-                f.write(f"Task: {task_id}\n")
-                f.write(f"Error: {e}\n")
-        
-        # 计算处理时间
-        start_time = datetime.fromisoformat(task['startedAt'])
-        processing_time = (datetime.now() - start_time).total_seconds()
-        
-        # 更新任务完成状态（使用实际图片尺寸）
-        try:
-            from PIL import Image
-            with Image.open(file_path) as img:
-                orig_width, orig_height = img.size
-                out_width = orig_width * scale
-                out_height = orig_height * scale
-        except:
-            out_width = 1920 * scale
-            out_height = 1080 * scale
-        
+        out_width = orig_w * scale
+        out_height = orig_h * scale
         update_task(task_id,
                    status='completed',
                    progress=100,
@@ -458,6 +452,205 @@ def process_image_task(task_id):
         update_task(task_id, status='failed', error=str(e))
 
 # ==========================================
+# 视频超分处理（真实 NPU 加速）
+# ==========================================
+def process_video_task(task_id):
+    """视频超分处理任务（NPU加速版，使用光流运动补偿插值）"""
+    task = get_task(task_id)
+    if not task:
+        return
+    
+    cap = None
+    out = None
+    
+    try:
+        # 更新状态：开始处理
+        update_task(task_id, 
+                   status='preprocessing',
+                   progress=0,
+                   startedAt=datetime.now().isoformat())
+        
+        file_path = task['filePath']
+        settings = task['settings']
+        scale = settings.get('scale', 4)
+        use_npu = settings.get('useNpu', True) and npu_engine.npu_available
+        
+        # 打开视频
+        cap = cv2.VideoCapture(file_path)
+        if not cap.isOpened():
+            raise Exception(f"无法打开视频: {file_path}")
+        
+        src_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        dst_w, dst_h = src_w * scale, src_h * scale
+        
+        # 限制输出分辨率（最大 1920x1080）
+        max_w, max_h = 1920, 1080
+        if dst_w > max_w or dst_h > max_h:
+            # 计算缩放比例
+            scale_w = max_w / dst_w
+            scale_h = max_h / dst_h
+            resize_scale = min(scale_w, scale_h)
+            dst_w = int(dst_w * resize_scale)
+            dst_h = int(dst_h * resize_scale)
+            print(f"输出分辨率限制: {dst_w}x{dst_h}")
+        
+        print(f"视频超分: {src_w}x{src_h} -> {dst_w}x{dst_h}")
+        
+        print(f"视频超分: {src_w}x{src_h} -> {dst_w}x{dst_h} ({scale}x)")
+        print(f"总帧数: {total_frames}, FPS: {fps:.2f}")
+        
+        update_task(task_id, 
+                   status='preprocessing',
+                   progress=5,
+                   totalFrames=total_frames,
+                   outputResolution=f"{dst_w}x{dst_h}")
+        
+        # 尝试创建 VideoWriter，如果失败则报错
+        output_filename = f"videosr_{task_id}_{scale}x.mp4"
+        temp_output_path = OUTPUT_DIR / f"temp_{output_filename}"
+        output_path = OUTPUT_DIR / output_filename
+        
+        # 尝试多种编码格式
+        fourcc_options = [
+            ('mp4v', 'mp4'),
+            ('avc1', 'mp4'),
+            ('XVID', 'avi'),
+            ('H264', 'mp4'),
+        ]
+        
+        out = None
+        for fourcc_code, ext in fourcc_options:
+            test_path = OUTPUT_DIR / f"temp_{task_id}.{ext}"
+            fourcc = cv2.VideoWriter_fourcc(*fourcc_code)
+            test_out = cv2.VideoWriter(str(test_path), fourcc, fps, (dst_w, dst_h))
+            if test_out.isOpened():
+                out = test_out
+                temp_output_path = test_path
+                output_path = OUTPUT_DIR / f"videosr_{task_id}_{scale}x.{ext}"
+                print(f"VideoWriter created with {fourcc_code}")
+                break
+            else:
+                test_out.release()
+        
+        if not out or not out.isOpened():
+            raise Exception("无法创建视频写入器，请检查 OpenCV 编码支持")
+        
+        update_task(task_id, status='processing', progress=10)
+        
+        # 处理帧
+        t_start = time.time()
+        frame_idx = 0
+        npu_count = 0
+        
+        # 读取第一帧
+        ret, frame0 = cap.read()
+        if not ret:
+            raise Exception("视频没有帧")
+        
+        # 第一帧：NPU 推理
+        sr0 = npu_engine.upsample(frame0)
+        out.write(sr0)
+        npu_count += 1
+        frame_idx = 1
+        
+        prev_sr = sr0
+        prev_orig = frame0
+        
+        update_task(task_id, 
+                   status='processing',
+                   progress=10 + int(80 * frame_idx / total_frames),
+                   processedFrames=frame_idx)
+        
+        # 处理剩余帧
+        while True:
+            current_task = get_task(task_id)
+            if current_task and current_task.get('cancelled'):
+                update_task(task_id, status='cancelled')
+                cap.release()
+                out.release()
+                return
+            
+            # 读取奇数帧（用于光流计算）
+            ret1, orig_mid = cap.read()
+            if not ret1:
+                break
+            
+            # 读取偶数帧（用于 NPU 推理）
+            ret2, orig_next = cap.read()
+            
+            if ret2:
+                # NPU 推理偶数帧
+                sr_next = npu_engine.upsample(orig_next)
+                npu_count += 1
+                
+                # 光流运动补偿插值奇数帧
+                mid_frame = motion_compensated_interpolation(
+                    prev_sr, sr_next, prev_orig, orig_next, scale=scale
+                )
+                
+                # 写入奇数帧（插值）
+                out.write(mid_frame)
+                frame_idx += 1
+                
+                # 写入偶数帧（NPU）
+                out.write(sr_next)
+                frame_idx += 2
+                
+                # 更新状态
+                prev_sr = sr_next
+                prev_orig = orig_next
+                
+            else:
+                # 最后一帧（奇数），复制前一帧的 SR 结果
+                out.write(prev_sr)
+                frame_idx += 1
+                break
+            
+            # 更新进度
+            if frame_idx % 10 == 0:
+                progress = 10 + int(80 * frame_idx / total_frames)
+                elapsed = time.time() - t_start
+                eta = (elapsed / frame_idx) * (total_frames - frame_idx) if frame_idx > 0 else 0
+                
+                update_task(task_id,
+                           status='processing',
+                           progress=min(progress, 95),
+                           processedFrames=frame_idx,
+                           eta=int(eta))
+        
+        cap.release()
+        out.release()
+        
+        # 计算处理时间
+        processing_time = (datetime.now() - datetime.fromisoformat(task['startedAt'])).total_seconds()
+        
+        # 更新任务完成状态
+        update_task(task_id,
+                   status='completed',
+                   progress=100,
+                   outputPath=str(output_path),
+                   outputResolution=f"{dst_w}x{dst_h}",
+                   processingTime=processing_time,
+                   completedAt=datetime.now().isoformat())
+        
+        print(f"视频任务 {task_id} 完成，耗时 {processing_time:.2f} 秒")
+        print(f"  NPU 推理次数: {npu_count}")
+        
+    except Exception as e:
+        print(f"Video task {task_id} error: {e}")
+        import traceback
+        traceback.print_exc()
+        update_task(task_id, status='failed', error=str(e))
+        
+        if cap:
+            cap.release()
+        if out:
+            out.release()
+
+# ==========================================
 # API路由
 # ==========================================
 @app.route('/')
@@ -471,8 +664,9 @@ def health_check():
     return jsonify({
         'success': True,
         'message': 'VideoSR服务正常运行',
-        'version': '1.0.0',
-        'npu_available': npu_processor.npu_available
+        'version': '2.0.0',
+        'npu_available': npu_engine.npu_available,
+        'model': MODEL_NAME
     })
 
 @app.route('/api/upload', methods=['POST'])
@@ -606,6 +800,39 @@ def cancel_task(task_id):
         'message': '取消请求已发送'
     })
 
+@app.route('/api/heartbeat', methods=['POST'])
+def heartbeat():
+    """前端心跳检测（每15秒）"""
+    try:
+        data = request.json or {}
+        client_time = data.get('time', '')
+        print(f"[HEARTBEAT] {datetime.now().strftime('%H:%M:%S')} client={client_time}", flush=True)
+        return jsonify({'success': True, 'serverTime': datetime.now().isoformat()})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/frontend-log', methods=['POST'])
+def frontend_log():
+    """接收前端事件日志并打印到后台"""
+    try:
+        data = request.json or {}
+        level = data.get('level', 'info')
+        message = data.get('message', '')
+        source = data.get('source', 'frontend')
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        # 用不同前缀打印，方便 grep
+        prefix = {
+            'info': '[FRONTEND]',
+            'warn': '[FRONTEND-WARN]',
+            'error': '[FRONTEND-ERROR]',
+            'event': '[FRONTEND-EVENT]',
+            'click': '[FRONTEND-CLICK]',
+        }.get(level, '[FRONTEND]')
+        print(f"{timestamp} {prefix} {message}", flush=True)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @app.route('/api/download/<task_id>', methods=['GET'])
 def download_result(task_id):
     """下载处理结果"""
@@ -636,20 +863,20 @@ def download_result(task_id):
 # ==========================================
 if __name__ == '__main__':
     print("=" * 60)
-    print("  VideoSR WebUI 服务（支持视频+图片超分）")
-    print("  版本: 1.1.0")
+    print("  VideoSR WebUI 服务（真实 AI 超分 + NPU 加速）")
+    print("  版本: 2.0.0")
     print("  URL: http://localhost:5000")
     print("=" * 60)
     print()
     print("功能特性:")
-    print("  • AI视频/图片超分辨率增强")
-    print("  • NPU加速支持（Qualcomm Hexagon NPU）")
-    print("  • 支持多种算法: Real-ESRGAN, BasicVSR++, EDVR")
+    print("  • 真实 AI 视频/图片超分辨率增强（Real-ESRGAN x4plus）")
+    print("  • NPU 加速支持（Qualcomm Hexagon NPU）")
+    print("  • 光流运动补偿插值（奇数帧）")
     print("  • 放大倍数: 2x, 4x")
-    print("  • 智能降噪处理")
     print("  • 任务进度实时跟踪")
     print()
-    print(f"NPU状态: {'可用' if npu_processor.npu_available else '不可用（将使用CPU模式）'}")
+    print(f"NPU状态: {'可用 ✓' if npu_engine.npu_available else '不可用（将使用CPU模式）⚠'}")
+    print(f"模型: {MODEL_NAME}")
     print()
     print("按 Ctrl+C 停止服务")
     print("=" * 60)
