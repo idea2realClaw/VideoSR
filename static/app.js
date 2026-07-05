@@ -662,6 +662,9 @@ function showPreview(file, uploadResult) {
             var objectUrl = URL.createObjectURL(file);
             origImage.src = objectUrl;
             origImage.style.display = 'block';
+            origImage.style.objectFit = 'contain';
+            origImage.style.width = '100%';
+            origImage.style.height = '100%';
             console.log('Original image set:', objectUrl);
         }
         
@@ -670,6 +673,9 @@ function showPreview(file, uploadResult) {
         if (resultImage && origImage) {
             resultImage.src = origImage.src;
             resultImage.style.display = 'block';
+            resultImage.style.objectFit = 'contain';
+            resultImage.style.width = '100%';
+            resultImage.style.height = '100%';
         }
         var placeholder = document.getElementById('imageComparePlaceholder');
         if (placeholder) placeholder.style.display = 'none';
@@ -1148,6 +1154,18 @@ function showCompletion(task) {
         if (container) container.classList.add('comparing');
         
         var resultImage = document.getElementById('resultImage');
+        var originalImage = document.getElementById('originalImage');
+        // 强制设置 object-fit: contain，防止 CSS 缓存或优先级问题
+        if (resultImage) {
+            resultImage.style.objectFit = 'contain';
+            resultImage.style.width = '100%';
+            resultImage.style.height = '100%';
+        }
+        if (originalImage) {
+            originalImage.style.objectFit = 'contain';
+            originalImage.style.width = '100%';
+            originalImage.style.height = '100%';
+        }
         if (resultImage) {
             resultImage.onload = function() {
                 var placeholder = document.getElementById('imageComparePlaceholder');
@@ -1156,8 +1174,10 @@ function showCompletion(task) {
                 // 打印图片实际像素和容器显示大小
                 var rw = this.naturalWidth, rh = this.naturalHeight;
                 var cw = container ? container.offsetWidth : 0, ch = container ? container.offsetHeight : 0;
-                console.log('[RESULT IMAGE] naturalSize:', rw, 'x', rh, '| containerSize:', cw, 'x', ch);
-                sendBackendLog('info', '[RESULT] 结果图像素:' + rw + 'x' + rh + ' 容器大小:' + cw + 'x' + ch, 'completion');
+                var computed = window.getComputedStyle(this);
+                var fit = computed.objectFit;
+                console.log('[RESULT IMAGE] naturalSize:', rw, 'x', rh, '| containerSize:', cw, 'x', ch, '| object-fit:', fit);
+                sendBackendLog('info', '[RESULT] 结果图像素:' + rw + 'x' + rh + ' 容器:' + cw + 'x' + ch + ' object-fit:' + fit, 'completion');
             };
             resultImage.onerror = function() {
                 console.error('Failed to load result image:', fileUrl);
