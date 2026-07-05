@@ -201,6 +201,110 @@ body {
     border-color: var(--primary);
 }
 
+/* 导航栏：模式切换（中央） */
+.nav-mode-switcher {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 20px;
+    padding: 4px;
+}
+
+.nav-mode-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border: none;
+    border-radius: 16px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+}
+
+.nav-mode-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255,255,255,0.08);
+}
+
+.nav-mode-btn.active {
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 2px 8px rgba(99,102,241,0.35);
+}
+
+/* 导航栏：右侧工具区 */
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 汉堡菜单按钮（移动端） */
+.nav-hamburger {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.nav-hamburger:hover {
+    background: var(--bg-hover);
+}
+
+.nav-hamburger span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: var(--text-primary);
+    border-radius: 2px;
+    transition: all var(--transition-fast);
+}
+
+/* 汉堡菜单激活状态（变成 X） */
+.nav-hamburger.active span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+}
+
+.nav-hamburger.active span:nth-child(2) {
+    opacity: 0;
+}
+
+.nav-hamburger.active span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+}
+
+/* 日志按钮 */
+.log-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    transition: all var(--transition-fast);
+}
+
+.log-toggle-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--primary);
+    color: var(--text-primary);
+}
+
 /* ==========================================
    Hero区域
    ========================================== */
@@ -1824,4 +1928,59 @@ body {
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     padding: 24px;
+}
+
+/* ==========================================
+   移动端响应式
+   ========================================== */
+@media (max-width: 768px) {
+    .nav-hamburger {
+        display: flex;
+    }
+    
+    .nav-mode-switcher {
+        display: none;
+        position: absolute;
+        top: var(--nav-height);
+        left: 0;
+        right: 0;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        padding: 12px 20px;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 999;
+    }
+    
+    .nav-mode-switcher.open {
+        display: flex;
+    }
+    
+    .nav-mode-btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .nav-actions {
+        gap: 4px;
+    }
+    
+    .log-toggle-btn span:last-child {
+        display: none;
+    }
+    
+    .hero-title {
+        font-size: 2.5rem;
+    }
+    
+    .compare-container {
+        width: 100% !important;
+        height: auto !important;
+        min-height: 300px;
+    }
+    
+    .compare-original img,
+    .compare-original video {
+        max-height: 400px;
+    }
 }

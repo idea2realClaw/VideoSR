@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VideoSR - AI视频/图片超分辨率增强工具</title>
-    <link rel="stylesheet" href="static/style.css?v=2026070527">
+    <link rel="stylesheet" href="static/style.css?v=2026070601">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
 </head>
 <body>
@@ -16,10 +16,19 @@
                 <span class="logo-text">VideoSR</span>
                 <span class="logo-badge">AI</span>
             </div>
-            <div class="nav-links">
-                <a href="#home" class="nav-link active">首页</a>
-                <a href="#features" class="nav-link">功能</a>
-                <a href="#about" class="nav-link">关于</a>
+            <!-- 模式切换（在导航栏中央） -->
+            <div class="nav-mode-switcher">
+                <button class="nav-mode-btn active" data-mode="image" id="navImageModeBtn">
+                    <span>🖼️</span>
+                    <span>图片超分</span>
+                </button>
+                <button class="nav-mode-btn" data-mode="video" id="navVideoModeBtn">
+                    <span>🎬</span>
+                    <span>视频超分</span>
+                </button>
+            </div>
+            <!-- 右侧工具 -->
+            <div class="nav-actions">
                 <button class="theme-toggle" id="themeToggle" title="切换主题">
                     <span class="theme-icon">🌙</span>
                 </button>
@@ -27,6 +36,12 @@
                 <button class="log-toggle-btn" id="logToggleBtn" title="打开/关闭日志窗口">
                     <span>📋</span>
                     <span>日志</span>
+                </button>
+                <!-- 移动端汉堡菜单按钮 -->
+                <button class="nav-hamburger" id="navHamburger" title="菜单">
+                    <span></span>
+                    <span></span>
+                    <span></span>
                 </button>
             </div>
         </div>
@@ -60,17 +75,6 @@
                             <span>高质量输出</span>
                         </div>
                     </div>
-                </div>
-                <!-- 模式切换放在首页 -->
-                <div class="mode-switcher">
-                    <button class="mode-btn active" data-mode="video" id="videoModeBtn">
-                        <span class="mode-icon">🎬</span>
-                        <span>视频超分</span>
-                    </button>
-                    <button class="mode-btn" data-mode="image" id="imageModeBtn">
-                        <span class="mode-icon">🖼️</span>
-                        <span>图片超分</span>
-                    </button>
                 </div>
             </section>
 
@@ -432,6 +436,6 @@
         <p class="loading-text" id="loadingText">加载中...</p>
     </div>
 
-    <script src="static/app.js?v=2026070527"></script>
+    <script src="static/app.js?v=2026070601"></script>
 </body>
 </html>

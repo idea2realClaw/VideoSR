@@ -362,26 +362,49 @@ function updateThemeIcon(theme) {
 // ==========================================
 function initModeSwitch() {
     console.log('initModeSwitch() called');
-    console.log('videoModeBtn:', Elements.videoModeBtn);
-    console.log('imageModeBtn:', Elements.imageModeBtn);
     
-    if (Elements.videoModeBtn) {
-        Elements.videoModeBtn.addEventListener('click', function() {
-            console.log('Video mode button clicked');
+    // 导航栏模式切换按钮（新）
+    var navImageBtn = document.getElementById('navImageModeBtn');
+    var navVideoBtn = document.getElementById('navVideoModeBtn');
+    
+    if (navVideoBtn) {
+        navVideoBtn.addEventListener('click', function() {
+            console.log('Nav video mode button clicked');
             switchMode('video');
+            // 移动端点击后关闭菜单
+            var switcher = document.querySelector('.nav-mode-switcher');
+            if (switcher) switcher.classList.remove('open');
         });
     } else {
-        console.error('videoModeBtn not found!');
+        console.error('navVideoModeBtn not found!');
     }
     
-    if (Elements.imageModeBtn) {
-        Elements.imageModeBtn.addEventListener('click', function() {
-            console.log('Image mode button clicked');
+    if (navImageBtn) {
+        navImageBtn.addEventListener('click', function() {
+            console.log('Nav image mode button clicked');
             switchMode('image');
+            // 移动端点击后关闭菜单
+            var switcher = document.querySelector('.nav-mode-switcher');
+            if (switcher) switcher.classList.remove('open');
         });
     } else {
-        console.error('imageModeBtn not found!');
+        console.error('navImageModeBtn not found!');
     }
+    
+    // 汉堡菜单按钮
+    var hamburger = document.getElementById('navHamburger');
+    if (hamburger) {
+        hamburger.addEventListener('click', function() {
+            this.classList.toggle('active');
+            var switcher = document.querySelector('.nav-mode-switcher');
+            if (switcher) {
+                switcher.classList.toggle('open');
+            }
+        });
+    }
+    
+    // 默认切换到图片超分
+    switchMode('image');
 }
 
 function switchMode(mode) {
@@ -390,9 +413,11 @@ function switchMode(mode) {
     Logger.info(`切换模式: ${mode === 'video' ? '视频超分' : '图片超分'}`);
     AppState.mode = mode;
     
-    // 更新按钮状态
-    if (Elements.videoModeBtn) Elements.videoModeBtn.classList.toggle('active', mode === 'video');
-    if (Elements.imageModeBtn) Elements.imageModeBtn.classList.toggle('active', mode === 'image');
+    // 更新导航栏按钮状态
+    var navImageBtn = document.getElementById('navImageModeBtn');
+    var navVideoBtn = document.getElementById('navVideoModeBtn');
+    if (navImageBtn) navImageBtn.classList.toggle('active', mode === 'image');
+    if (navVideoBtn) navVideoBtn.classList.toggle('active', mode === 'video');
     
     // 更新上传区域
     if (mode === 'video') {
@@ -407,9 +432,12 @@ function switchMode(mode) {
         if (Elements.uploadFormats) Elements.uploadFormats.textContent = '支持格式: JPG, PNG, WebP, BMP, TIFF';
         if (Elements.uploadBtnText) Elements.uploadBtnText.textContent = '选择图片文件';
         if (Elements.heroSubtitle) Elements.heroSubtitle.textContent = '免费、开源、隐私安全 - 在浏览器中直接使用AI增强您的图片画质';
-        AppState.settings.format = 'png';
-        Logger.input('模式: 图片超分, 格式: PNG');
+        AppState.settings.format = 'jpg';
+        Logger.input('模式: 图片超分, 格式: JPG');
     }
+    
+    // 更新格式选择显示
+    updateFormatDisplay();
     
     // 重置上传状态
     resetToUpload();
