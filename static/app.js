@@ -1203,13 +1203,6 @@ function showCompletion(task) {
                 console.log('[RESULT IMAGE] 结果图渲染尺寸:', computedResult.width + 'x' + computedResult.height);
                 sendBackendLog('info', '[RESULT] 结果图:' + rw + 'x' + rh + ' 容器:' + cw + 'x' + ch, 'completion');
             };
-                // 打印图片实际像素和容器显示大小
-                var cw = container ? container.offsetWidth : 0, ch = container ? container.offsetHeight : 0;
-                var computed = window.getComputedStyle(this);
-                var fit = computed.objectFit;
-                console.log('[RESULT IMAGE] naturalSize:', rw, 'x', rh, '| containerSize:', cw, 'x', ch, '| object-fit:', fit);
-                sendBackendLog('info', '[RESULT] 结果图像素:' + rw + 'x' + rh + ' 容器:' + cw + 'x' + ch + ' object-fit:' + fit, 'completion');
-            };
             resultImage.onerror = function() {
                 console.error('Failed to load result image:', fileUrl);
                 sendBackendLog('error', '结果图片加载失败: ' + fileUrl, 'completion');
