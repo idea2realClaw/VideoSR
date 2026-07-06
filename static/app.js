@@ -1161,7 +1161,7 @@ function showCompletion(task) {
         var container = document.getElementById('imageCompareContainer');
         if (container) container.classList.add('comparing');
         
-                // 结果图用 background-image 设置（和原图用相同渲染方式，100% 对齐）
+                // 结果图用 blob URL 设 background-image（确保完全加载再显示）
         var resultDiv = document.getElementById('imageCompareResult');
         var origDiv = document.getElementById('originalImageBg');
         
@@ -1171,52 +1171,62 @@ function showCompletion(task) {
             var blobMatch = oldUrl.match(/url\("(blob:[^"]+)"\)/);
             if (blobMatch) URL.revokeObjectURL(blobMatch[1]);
             
-            // 等待图片加载完成后再设置 background-image
-            var tmpImg = new Image();
-            tmpImg.onload = function() {
-                var rw = tmpImg.naturalWidth, rh = tmpImg.naturalHeight;
-                // 检查宽高比是否一致
-                if (origDiv) {
-                    var origBg = origDiv.style.backgroundImage;
-                    var origMatch = origBg.match(/url\("(blob:[^"]+)"\)/);
-                    if (origMatch) {
-                        var origImg = new Image();
-                        origImg.onload = function() {
-                            var origRatio = origImg.naturalWidth / origImg.naturalHeight;
-                            var resultRatio = rw / rh;
-                            if (Math.abs(origRatio - resultRatio) > 0.01) {
-                                console.warn('[WARN] 宽高比不一致！原图:', origRatio.toFixed(2), '结果:', resultRatio.toFixed(2));
-                            } else {
-                                console.log('[RESULT] 宽高比一致:', resultRatio.toFixed(2), '→ 两张图必然对齐');
-                            }
-                        };
-                        origImg.src = origMatch[1];
+            // 用 fetch 下载结果图，转成 blob URL 再设置 background-image
+            // 这样确保图片完全加载后再显示，避免异步渲染导致的大小不对
+            console.log('[RESULT] 开始下载结果图:', fileUrl);
+            fetch(fileUrl).then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob();
+            }).then(function(blob) {
+                var blobUrl = URL.createObjectURL(blob);
+                // 先加载图片获取尺寸，再设置 background-image
+                var tmpImg = new Image();
+                tmpImg.onload = function() {
+                    var rw = tmpImg.naturalWidth, rh = tmpImg.naturalHeight;
+                    console.log('[RESULT] 结果图尺寸:', rw, 'x', rh);
+                    
+                    // 设置 background-image（blob URL，已完全加载）
+                    resultDiv.style.backgroundImage = 'url("' + blobUrl + '")';
+                    var placeholder = document.getElementById('imageComparePlaceholder');
+                    if (placeholder) placeholder.style.display = 'none';
+                    
+                    // 检查宽高比：若结果图和容器不一致，调整容器高度
+                    var resultRatio = rw / rh;
+                    var crect = container.getBoundingClientRect();
+                    var containerRatio = crect.width / crect.height;
+                    console.log('[RESULT] 结果图宽高比:', resultRatio.toFixed(4), '| 容器宽高比:', containerRatio.toFixed(4));
+                    if (Math.abs(resultRatio - containerRatio) > 0.005) {
+                        // 调整容器高度，让容器宽高比 = 结果图宽高比
+                        var newH = Math.round(720 / resultRatio);
+                        container.style.height = newH + 'px';
+                        console.log('[RESULT] 调整容器高度:', crect.height, '→', newH, '(匹配结果图)');
                     }
-                }
-                // 结果图直接用 fileUrl 设 background-image（两张图用完全相同的渲染路径）
-                // 先打印诊断信息
-                console.log('[RESULT] 设置结果图 background-image, URL:', fileUrl, '| 尺寸:', rw, 'x', rh);
+                    
+                    // 延迟一帧再初始化滑块，确保渲染完成
+                    requestAnimationFrame(function() {
+                        var crect2 = container.getBoundingClientRect();
+                        console.log('[RESULT] 最终容器尺寸:', crect2.width, 'x', crect2.height);
+                        initCompareSlider('image');
+                        console.log('[RESULT] initCompareSlider 完成');
+                    });
+                };
+                tmpImg.onerror = function() {
+                    console.error('[RESULT] 结果图加载失败（blob URL）');
+                    // 回退：直接用 fileUrl
+                    resultDiv.style.backgroundImage = 'url("' + fileUrl + '")';
+                    var placeholder = document.getElementById('imageComparePlaceholder');
+                    if (placeholder) placeholder.style.display = 'none';
+                    requestAnimationFrame(function() { initCompareSlider('image'); });
+                };
+                tmpImg.src = blobUrl;
+            }).catch(function(e) {
+                console.error('[RESULT] 结果图下载失败:', e);
+                // 回退：直接用 fileUrl
                 resultDiv.style.backgroundImage = 'url("' + fileUrl + '")';
-                // 强制让浏览器立即重新计算布局
-                resultDiv.offsetHeight;
                 var placeholder = document.getElementById('imageComparePlaceholder');
                 if (placeholder) placeholder.style.display = 'none';
-                // 延迟一帧再初始化滑块，确保 background-image 已开始加载
-                requestAnimationFrame(function() {
-                    // 诊断：打印容器和结果图的实际尺寸
-                    var crect = container.getBoundingClientRect();
-                    var rrect = resultDiv.getBoundingClientRect();
-                    console.log('[RESULT] container rect:', crect.width, 'x', crect.height);
-                    console.log('[RESULT] resultDiv rect:', rrect.width, 'x', rrect.height);
-                    console.log('[RESULT] resultDiv background-size:', getComputedStyle(resultDiv).backgroundSize);
-                    initCompareSlider('image');
-                    console.log('[RESULT] initCompareSlider 完成');
-                });
-            };
-            tmpImg.onerror = function() {
-                console.error('Failed to load result image:', fileUrl);
-            };
-            tmpImg.src = fileUrl;
+                requestAnimationFrame(function() { initCompareSlider('image'); });
+            });
         }
 
     }
