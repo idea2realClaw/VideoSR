@@ -623,31 +623,6 @@ body {
     animation: pulse 2s infinite;
 }
 
-.video-info {
-    margin-top: 12px;
-    font-size: 0.85rem;
-    color: var(--text-tertiary);
-    text-align: left;
-}
-
-.video-info .video-loading-status {
-    color: var(--text-primary);
-    font-size: 0.9rem;
-    margin-bottom: 4px;
-}
-
-.video-info .video-loading-hint {
-    color: var(--accent-color);
-    font-size: 0.8rem;
-    margin-top: 4px;
-}
-
-.video-info .video-loading-error {
-    color: #e74c3c;
-    font-size: 0.85rem;
-    margin-top: 4px;
-    font-weight: 600;
-}
 
 /* ==========================================
    设置面板
@@ -1945,47 +1920,51 @@ body {
 }
 
 /* ==========================================
-   视频预览：720px 播放面板 + 自定义工具条
+   视频对比滑块：原图左侧、增强图右侧、中间分割线可拖动
    ========================================== */
-.video-preview-panel {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 24px;
-}
 
-/* 单个视频播放面板（720px 宽） */
-.video-player-panel {
+/* 对比容器（固定 720px 宽，高度由 JS 根据视频宽高比动态设置） */
+.video-compare-container {
+    position: relative;
     width: 720px;
     max-width: 100%;
     background: #000;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
     overflow: hidden;
+    cursor: ew-resize;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
-.video-player-title {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    padding: 8px 12px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-color);
-}
-
-.video-player-stage {
-    width: 720px;
-    max-width: 100%;
-    min-height: 200px;
-    background: #000;
-    line-height: 0;
-}
-
-.video-player-stage video {
+/* 两个视频层共用样式 */
+.video-compare-container video {
     display: block;
     width: 100%;
-    height: auto;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
     background: #000;
+}
+
+/* 增强视频（底层，显示在滑块右侧） */
+.video-compare-result {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+/* 原视频（上层，滑块左侧显示） */
+.video-compare-original {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    clip-path: inset(0 50% 0 0);
+    transition: clip-path 0.05s;
 }
 
 /* 播放工具条 */

@@ -611,7 +611,7 @@ function showPreview(file, uploadResult) {
     }
     
     if (AppState.mode === 'video') {
-        // 显示视频预览（原始视频面板 + 播放工具条）
+        // 显示视频预览（对比滑块布局：原始视频左侧，增强视频右侧）
         if (Elements.videoPreviewSection) {
             Elements.videoPreviewSection.style.display = 'block';
         }
@@ -619,36 +619,42 @@ function showPreview(file, uploadResult) {
             Elements.imagePreviewSection.style.display = 'none';
         }
         
-        // 设置原始视频预览
+        // 设置原始视频和结果视频（处理完成前都显示原始视频）
         var origVideo = document.getElementById('originalVideo');
+        var resultVideo = document.getElementById('resultVideo');
         if (origVideo) {
             // 释放旧的 blob URL
             if (origVideo.src && origVideo.src.indexOf('blob:') === 0) {
                 URL.revokeObjectURL(origVideo.src);
             }
+            if (resultVideo && resultVideo.src && resultVideo.src.indexOf('blob:') === 0) {
+                URL.revokeObjectURL(resultVideo.src);
+            }
             var objectUrl = URL.createObjectURL(file);
             origVideo.src = objectUrl;
             origVideo.load();
+            // 结果视频（底层）也先显示原视频，整个区域都是原始视频
+            if (resultVideo) {
+                resultVideo.src = objectUrl;
+                resultVideo.load();
+            }
         }
         
-        // 隐藏增强后视频面板（等待处理完成）
-        var resultPanel = document.getElementById('resultVideoPanel');
-        if (resultPanel) resultPanel.style.display = 'none';
-        var resultVideo = document.getElementById('resultVideo');
-        if (resultVideo) {
-            resultVideo.removeAttribute('src');
-            resultVideo.load();
-        }
+        // 初始化视频对比滑块
+        initVideoCompareSlider();
         
-        // 绑定原始视频播放工具条
-        setupVideoControls('originalVideo', 'originalVideoPlay', 'originalVideoStop',
-                            'originalVideoProgress', 'originalVideoProgressFilled', 'originalVideoTime');
+        // 绑定统一播放控制（两个视频同步播放）
+        setupVideoCompareControls();
         
         // 显示视频信息
         var fileSize = formatFileSize(file.size);
         var origInfo = document.getElementById('originalVideoInfo');
         if (origInfo) {
             origInfo.innerHTML = '<div>文件名: ' + file.name + '</div><div>文件大小: ' + fileSize + '</div>';
+        }
+        var resultInfo = document.getElementById('resultVideoInfo');
+        if (resultInfo) {
+            resultInfo.innerHTML = '<div>增强后 - 等待处理完成...</div>';
         }
     } else {
         // 显示图片预览（Upscayl 风格对比滑块）
@@ -760,6 +766,11 @@ function resetToUpload() {
     if (Elements.originalVideo && Elements.originalVideo.src) {
         URL.revokeObjectURL(Elements.originalVideo.src);
     }
+    if (Elements.resultVideo && Elements.resultVideo.src) {
+        if (Elements.resultVideo.src.indexOf('blob:') === 0) {
+            URL.revokeObjectURL(Elements.resultVideo.src);
+        }
+    }
     if (Elements.originalImage && Elements.originalImage.src) {
         URL.revokeObjectURL(Elements.originalImage.src);
     }
@@ -785,9 +796,7 @@ function resetToUpload() {
         Elements.imagePreviewSection.style.display = 'none';
     }
     
-    // 移除对比模式
-    var resultPanel = document.getElementById('resultVideoPanel');
-    if (resultPanel) resultPanel.style.display = 'none';
+    // 移除对比模式（视频和图片）
     var imageContainer = document.getElementById('imageCompareContainer');
     if (imageContainer) imageContainer.classList.remove('comparing');
     
@@ -1204,86 +1213,41 @@ function showCompletion(task) {
     }
     
     if (AppState.mode === 'video') {
-        // 显示结果视频面板（处理完成后）
-        var resultPanel = document.getElementById('resultVideoPanel');
-        if (resultPanel) resultPanel.style.display = 'block';
-
+        // 切换增强后视频源（底层/右侧显示增强视频，对比滑块自动生效）
         var resultVideo = document.getElementById('resultVideo');
         var rvInfo = document.getElementById('resultVideoInfo');
-        var origVideo = document.getElementById('originalVideo');
 
-        // 绑定增强后视频播放工具条
-        setupVideoControls('resultVideo', 'resultVideoPlay', 'resultVideoStop',
-                            'resultVideoProgress', 'resultVideoProgressFilled', 'resultVideoTime');
-
-        // 第一阶段：先用原始视频验证播放器，播放结束后自动加载增强视频
-        if (origVideo && origVideo.src) {
-            // 显示测试状态
-            if (rvInfo) {
-                rvInfo.innerHTML = '<div class="video-loading-status">🔍 正在用原始视频验证播放器...</div>'
-                    + '<div>增强文件: ' + fileName + '</div>'
-                    + '<div>分辨率: ' + (task.outputResolution || '未知') + '</div>'
-                    + '<div class="video-loading-hint">⏳ 播放完原始视频后自动加载增强视频</div>';
-            }
-
-            // 加载原始视频 blob URL 到结果面板（已知可播）
-            resultVideo.src = origVideo.src;
+        if (resultVideo) {
+            resultVideo.src = fileUrl;
             resultVideo.load();
 
-            // 移除旧的 ended 监听避免重复绑定，一次性加载增强视频
-            var _enhancedHandler = function _enhancedLoad() {
-                console.log('Original playback ended, loading enhanced video:', fileUrl);
-                sendBackendLog('info', 'Original ended → loading enhanced: ' + fileUrl, 'playback');
-
-                // 切换到增强视频
-                resultVideo.src = fileUrl;
-                resultVideo.load();
-
-                // 更新信息
-                if (rvInfo) {
-                    rvInfo.innerHTML = '<div>文件: ' + fileName + '</div>'
-                        + '<div>分辨率: ' + (task.outputResolution || '未知') + '</div>'
-                        + '<div class="video-loading-status">✅ 增强视频已加载，点击 ▶ 播放</div>';
+            // 增强视频加载完成后更新容器高度和信息
+            resultVideo.onloadeddata = function() {
+                var dur = resultVideo.duration || 0;
+                if (rvInfo && dur > 0) {
+                    rvInfo.innerHTML += '<div>时长: ' + Math.floor(dur) + ' 秒</div>';
                 }
+                // 根据增强视频的宽高比更新对比容器高度
+                var container = document.getElementById('videoCompareContainer');
+                if (container && resultVideo.videoWidth > 0) {
+                    var aspect = resultVideo.videoHeight / resultVideo.videoWidth;
+                    container.style.height = Math.round(720 * aspect) + 'px';
+                }
+            };
+        }
+        if (rvInfo) {
+            rvInfo.innerHTML = '<div>文件: ' + fileName + '</div>'
+                + '<div>分辨率: ' + (task.outputResolution || '未知') + '</div>'
+                + '<div>处理时间: ' + formatDuration(task.processingTime || 0) + '</div>';
+        }
 
-                // 增强视频加载完成时显示时长
-                resultVideo.onloadeddata = function() {
-                    var dur = resultVideo.duration || 0;
-                    if (rvInfo && dur > 0) {
-                        rvInfo.innerHTML += '<div>时长: ' + Math.floor(dur) + ' 秒</div>';
-                    }
-                };
-
-                // 增强视频加载失败时显示诊断信息
-                resultVideo.onerror = function() {
-                    var errMsg = resultVideo.error ? resultVideo.error.message : '未知错误';
-                    console.error('Enhanced video load error:', errMsg);
-                    sendBackendLog('error', 'Enhanced video load error: ' + errMsg, 'playback');
-                    showToast('error', '增强视频加载失败，文件编码可能不被浏览器支持');
-                    if (rvInfo) {
-                        rvInfo.innerHTML += '<div class="video-loading-error">❌ 增强视频加载失败（浏览器不支持此编码格式）</div>';
-                    }
-                };
-            }
-            // 移除旧绑定（防止多次 showCompletion 叠加）
-            resultVideo.removeEventListener('ended', _enhancedHandler);
-            resultVideo.addEventListener('ended', _enhancedHandler);
-
-        } else {
-            // 异常回退：直接加载增强视频
-            if (rvInfo) {
-                rvInfo.innerHTML = '<div>文件: ' + fileName + '</div><div>分辨率: ' + (task.outputResolution || '未知') + '</div>';
-            }
-            if (resultVideo) {
-                resultVideo.onloadeddata = function() {
-                    var dur = resultVideo.duration || 0;
-                    if (rvInfo && dur > 0) {
-                        rvInfo.innerHTML += '<div>时长: ' + Math.floor(dur) + ' 秒</div>';
-                    }
-                };
-                resultVideo.src = fileUrl;
-                resultVideo.load();
-            }
+        // 如果原视频之前播放完毕则重置位置（避免一个在头一个在尾）
+        var origVideo = document.getElementById('originalVideo');
+        if (origVideo && origVideo.paused && (origVideo.ended || origVideo.currentTime >= origVideo.duration - 0.1)) {
+            origVideo.currentTime = 0;
+        }
+        if (resultVideo && resultVideo.paused && (resultVideo.ended || resultVideo.currentTime >= resultVideo.duration - 0.1)) {
+            resultVideo.currentTime = 0;
         }
     } else {
         // 显示结果图片（Upscayl 风格：重叠对比滑块）
@@ -1557,15 +1521,107 @@ console.log('VideoSR app.js loaded');
 // ==========================================
 // 视频播放工具条绑定（开始/结束/进度/时间）
 // ==========================================
-function setupVideoControls(videoId, playId, stopId, progressId, filledId, timeId) {
-    var video = document.getElementById(videoId);
-    var playBtn = document.getElementById(playId);
-    var stopBtn = document.getElementById(stopId);
-    var progress = document.getElementById(progressId);
-    var filled = document.getElementById(filledId);
-    var timeLabel = document.getElementById(timeId);
-    if (!video || !playBtn || !stopBtn || !progress || !filled || !timeLabel) {
-        console.warn('setupVideoControls: 元素缺失', videoId);
+// ==========================================
+// 视频对比滑块：原图左侧/增强图右侧，可拖动分割线
+// ==========================================
+function initVideoCompareSlider() {
+    var container = document.getElementById('videoCompareContainer');
+    var slider = document.getElementById('videoCompareSlider');
+    var originalDiv = document.getElementById('videoCompareOriginal');
+    var origVideo = document.getElementById('originalVideo');
+
+    if (!container || !slider || !originalDiv) {
+        console.warn('Video compare slider elements missing');
+        return;
+    }
+
+    // 等视频元数据加载后设置容器高度
+    function setHeightFromVideo(videoEl) {
+        if (videoEl && videoEl.videoWidth > 0) {
+            var aspect = videoEl.videoHeight / videoEl.videoWidth;
+            container.style.height = Math.round(720 * aspect) + 'px';
+        }
+    }
+
+    if (origVideo) {
+        if (origVideo.readyState >= 1) {
+            setHeightFromVideo(origVideo);
+        } else {
+            origVideo.addEventListener('loadedmetadata', function() {
+                setHeightFromVideo(origVideo);
+            }, {once: true});
+        }
+    }
+
+    // 设置滑块位置
+    function setSliderPosition(clientX) {
+        var rect = container.getBoundingClientRect();
+        var x = clientX - rect.left;
+        x = Math.max(0, Math.min(rect.width, x));
+        var pct = (x / rect.width) * 100;
+        slider.style.left = pct + '%';
+        originalDiv.style.clipPath = 'inset(0 ' + (100 - pct) + '% 0 0)';
+    }
+
+    // 初始化居中
+    function initCenter() {
+        var rect = container.getBoundingClientRect();
+        if (rect.width > 0) {
+            setSliderPosition(rect.left + rect.width / 2);
+        } else {
+            requestAnimationFrame(initCenter);
+        }
+    }
+    initCenter();
+
+    // 拖动逻辑
+    var isDragging = false;
+    var handle = slider.querySelector('.image-compare-slider-handle');
+
+    function onStart(e) {
+        isDragging = true;
+        e.preventDefault();
+    }
+
+    function onMove(e) {
+        if (!isDragging) return;
+        var cx = e.type.indexOf('touch') === 0 ? e.touches[0].clientX : e.clientX;
+        setSliderPosition(cx);
+    }
+
+    function onEnd() {
+        isDragging = false;
+    }
+
+    slider.addEventListener('mousedown', onStart);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+
+    slider.addEventListener('touchstart', onStart);
+    document.addEventListener('touchmove', onMove);
+    document.addEventListener('touchend', onEnd);
+
+    // 点击容器任意位置移动滑块
+    container.addEventListener('click', function(e) {
+        if (e.target.closest('.image-compare-slider-handle')) return;
+        setSliderPosition(e.clientX);
+    });
+}
+
+// ==========================================
+// 同步双视频播放控件（原始视频与增强视频一起播放）
+// ==========================================
+function setupVideoCompareControls() {
+    var playBtn = document.getElementById('videoComparePlay');
+    var stopBtn = document.getElementById('videoCompareStop');
+    var progress = document.getElementById('videoCompareProgress');
+    var filled = document.getElementById('videoCompareProgressFilled');
+    var timeLabel = document.getElementById('videoCompareTime');
+    var origVideo = document.getElementById('originalVideo');
+    var resultVideo = document.getElementById('resultVideo');
+
+    if (!playBtn || !stopBtn || !progress || !filled || !timeLabel || !origVideo || !resultVideo) {
+        console.warn('setupVideoCompareControls: elements missing');
         return;
     }
 
@@ -1577,49 +1633,55 @@ function setupVideoControls(videoId, playId, stopId, progressId, filledId, timeI
     }
 
     function updateTime() {
-        var cur = video.currentTime || 0;
-        var dur = video.duration || 0;
+        var cur = origVideo.currentTime || 0;
+        var dur = origVideo.duration || 0;
         timeLabel.textContent = fmt(cur) + ' / ' + fmt(dur);
         var pct = dur > 0 ? (cur / dur) * 100 : 0;
         filled.style.width = pct + '%';
     }
 
-    // 仅首次绑定事件，避免重复上传时叠加监听器
+    // 仅首次绑定事件，避免重复上传叠加监听器
     if (!playBtn.dataset.bound) {
         playBtn.dataset.bound = '1';
 
         playBtn.addEventListener('click', function() {
-            var p = video.play();
-            if (p && p.catch) {
-                p.catch(function(e) {
-                    console.warn('video play failed:', e);
-                    showToast('error', '视频播放失败，请检查文件格式');
-                });
-            }
+            // 两个视频同步播放
+            var p1 = origVideo.play();
+            if (p1 && p1.catch) p1.catch(function(){});
+            var p2 = resultVideo.play();
+            if (p2 && p2.catch) p2.catch(function(){});
         });
 
         stopBtn.addEventListener('click', function() {
-            video.pause();
-            try { video.currentTime = 0; } catch (e) {}
+            origVideo.pause();
+            resultVideo.pause();
+            try { origVideo.currentTime = 0; } catch(e) {}
+            try { resultVideo.currentTime = 0; } catch(e) {}
             updateTime();
         });
 
         progress.addEventListener('click', function(e) {
             var rect = progress.getBoundingClientRect();
-            if (rect.width <= 0 || !isFinite(video.duration) || video.duration <= 0) return;
+            if (rect.width <= 0 || !isFinite(origVideo.duration) || origVideo.duration <= 0) return;
             var ratio = (e.clientX - rect.left) / rect.width;
             ratio = Math.max(0, Math.min(1, ratio));
-            video.currentTime = ratio * video.duration;
+            var newTime = ratio * origVideo.duration;
+            origVideo.currentTime = newTime;
+            resultVideo.currentTime = newTime;
         });
 
-        video.addEventListener('timeupdate', updateTime);
-        video.addEventListener('loadedmetadata', updateTime);
-        video.addEventListener('play', updateTime);
-        video.addEventListener('pause', updateTime);
-        video.addEventListener('ended', updateTime);
+        origVideo.addEventListener('timeupdate', updateTime);
+        origVideo.addEventListener('loadedmetadata', updateTime);
+        origVideo.addEventListener('play', updateTime);
+        origVideo.addEventListener('pause', updateTime);
+        origVideo.addEventListener('ended', function() {
+            resultVideo.pause();
+            try { resultVideo.currentTime = origVideo.currentTime; } catch(e) {}
+            updateTime();
+        });
     }
 
-    // 每次设置都重置进度条与时间
+    // 重置进度条与时间显示
     filled.style.width = '0%';
     timeLabel.textContent = '0:00 / 0:00';
 }
