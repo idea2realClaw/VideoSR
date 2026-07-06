@@ -1105,7 +1105,8 @@ function startProgressPolling() {
             const task = result.task;
             // 仅在状态或进度真正变化时才打印，避免相同值反复刷屏
             if (AppState._lastLogStatus !== task.status || AppState._lastLogProgress !== task.progress) {
-                Logger.info(`进度更新: ${task.status}, ${task.progress}%`);
+                var pf = task.processedFrames !== undefined ? task.processedFrames + '/' + (task.totalFrames || '?') + ' 帧, ' : '';
+                Logger.info(`进度更新: ${pf}${task.status}, ${task.progress}%`);
                 AppState._lastLogStatus = task.status;
                 AppState._lastLogProgress = task.progress;
             }
@@ -1122,6 +1123,9 @@ function startProgressPolling() {
                 
                 if (task.status === 'completed') {
                     Logger.success(`处理完成: 输出文件=${task.outputPath}, 分辨率=${task.outputResolution}, 耗时=${task.processingTime}秒`);
+                    if (task.diagnosticInfo) {
+                        Logger.info(task.diagnosticInfo);
+                    }
                     showCompletion(task);
                 } else if (task.status === 'cancelled') {
                     Logger.warn('任务已取消');

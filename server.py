@@ -706,16 +706,25 @@ def process_video_task(task_id):
         cap.release()
         out.release()
         
+        # 把临时文件重命名为正式输出（VideoWriter 实际写入了 temp 文件）
+        if os.path.exists(str(temp_output_path)) and temp_output_path != output_path:
+            if os.path.exists(str(output_path)):
+                os.remove(str(output_path))
+            os.rename(str(temp_output_path), str(output_path))
+        
         # 计算处理时间
         processing_time = (datetime.now() - datetime.fromisoformat(task['startedAt'])).total_seconds()
         
         # 更新任务完成状态
+        npu_avg = t_npu_total / npu_count if npu_count else 0
+        diagnostic = f"NPU推理{npu_count}次, 均{npu_avg:.3f}s/次, 总{t_npu_total:.2f}s; 光流合成{t_flow_total:.2f}s; IO/resize/融合{processing_time-t_npu_total-t_flow_total:.2f}s"
         update_task(task_id,
                    status='completed',
                    progress=100,
                    outputPath=str(output_path),
                    outputResolution=f"{dst_w}x{dst_h}",
                    processingTime=processing_time,
+                   diagnosticInfo=diagnostic,
                    completedAt=datetime.now().isoformat())
         
         print(f"视频任务 {task_id} 完成，耗时 {processing_time:.2f} 秒")
