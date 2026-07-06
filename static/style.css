@@ -1926,6 +1926,115 @@ body {
 }
 
 /* ==========================================
+   视频预览：720px 播放面板 + 自定义工具条
+   ========================================== */
+.video-preview-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+}
+
+/* 单个视频播放面板（720px 宽） */
+.video-player-panel {
+    width: 720px;
+    max-width: 100%;
+    background: #000;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.video-player-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.video-player-stage {
+    width: 720px;
+    max-width: 100%;
+    min-height: 200px;
+    background: #000;
+    line-height: 0;
+}
+
+.video-player-stage video {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: #000;
+}
+
+/* 播放工具条 */
+.video-controlbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+}
+
+.video-ctrl-btn {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: none;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.video-ctrl-btn:hover {
+    background: var(--primary-dark);
+}
+
+.video-ctrl-btn:active {
+    transform: scale(0.92);
+}
+
+/* 进度条（可点击跳转） */
+.video-progress {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(128, 128, 128, 0.35);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.video-progress-filled {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 0%;
+    background: var(--primary);
+    border-radius: 3px;
+    pointer-events: none;
+}
+
+.video-time {
+    flex-shrink: 0;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* ==========================================
    Upscayl 风格：图片对比滑块视图
    ========================================== */
 #imageCompareWrapper {

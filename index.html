@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VideoSR - AI视频/图片超分辨率增强工具</title>
-    <link rel="stylesheet" href="static/style.css?v=2026070618">
+    <link rel="stylesheet" href="static/style.css?v=2026070620">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
 </head>
 <body>
@@ -114,35 +114,45 @@
                                     </svg>
                                 </button>
                             </div>
-                            <div class="preview-container">
-                                <div class="compare-container" id="videoCompareContainer">
-                                    <div class="compare-original">
-                                        <video id="originalVideo" controls>
-                                            <source src="" type="">
+                            <div class="video-preview-panel" id="videoPreviewPanel">
+                                <!-- 原始视频：720px 面板 + 播放工具条 -->
+                                <div class="video-player-panel" id="originalVideoPanel">
+                                    <div class="video-player-title">原始视频</div>
+                                    <div class="video-player-stage">
+                                        <video id="originalVideo" playsinline preload="metadata">
                                             您的浏览器不支持视频播放
                                         </video>
-                                        <div class="compare-label compare-label-left">原始</div>
                                     </div>
-                                    <div class="compare-result" id="videoCompareResult">
-                                        <video id="resultVideo" controls style="display:none;">
-                                            <source src="" type="">
+                                    <div class="video-controlbar" id="originalVideoControlbar">
+                                        <button class="video-ctrl-btn" id="originalVideoPlay" type="button" title="开始">▶</button>
+                                        <button class="video-ctrl-btn" id="originalVideoStop" type="button" title="结束">■</button>
+                                        <div class="video-progress" id="originalVideoProgress">
+                                            <div class="video-progress-filled" id="originalVideoProgressFilled"></div>
+                                        </div>
+                                        <span class="video-time" id="originalVideoTime">0:00 / 0:00</span>
+                                    </div>
+                                </div>
+                                <!-- 增强后视频：处理完成后显示 -->
+                                <div class="video-player-panel" id="resultVideoPanel" style="display:none;">
+                                    <div class="video-player-title">增强后视频</div>
+                                    <div class="video-player-stage">
+                                        <video id="resultVideo" playsinline preload="metadata">
+                                            您的浏览器不支持视频播放
                                         </video>
-                                        <div class="compare-label compare-label-right">增强后</div>
                                     </div>
-                                    <div class="compare-slider" id="videoCompareSlider">
-                                        <div class="compare-slider-line"></div>
-                                        <div class="compare-slider-handle">⬌</div>
-                                        <div class="compare-slider-line"></div>
-                                    </div>
-                                    <div class="compare-placeholder" id="videoComparePlaceholder">
-                                        <div class="placeholder-icon">🎬</div>
-                                        <p>处理完成后显示对比</p>
+                                    <div class="video-controlbar" id="resultVideoControlbar">
+                                        <button class="video-ctrl-btn" id="resultVideoPlay" type="button" title="开始">▶</button>
+                                        <button class="video-ctrl-btn" id="resultVideoStop" type="button" title="结束">■</button>
+                                        <div class="video-progress" id="resultVideoProgress">
+                                            <div class="video-progress-filled" id="resultVideoProgressFilled"></div>
+                                        </div>
+                                        <span class="video-time" id="resultVideoTime">0:00 / 0:00</span>
                                     </div>
                                 </div>
-                                <div class="compare-info">
-                                    <div class="video-info" id="originalVideoInfo" style="display:inline-block;"></div>
-                                    <div class="video-info" id="resultVideoInfo" style="display:inline-block; margin-left:12px;"></div>
-                                </div>
+                            </div>
+                            <div class="compare-info">
+                                <div class="video-info" id="originalVideoInfo"></div>
+                                <div class="video-info" id="resultVideoInfo" style="margin-left:12px;"></div>
                             </div>
                         </div>
 
@@ -438,6 +448,6 @@
         <p class="loading-text" id="loadingText">加载中...</p>
     </div>
 
-    <script src="static/app.js?v=2026070618"></script>
+    <script src="static/app.js?v=2026070620"></script>
 </body>
 </html>
