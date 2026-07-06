@@ -804,12 +804,14 @@ function resetToUpload() {
         if (blobMatch) URL.revokeObjectURL(blobMatch[1]);
         origDiv.style.backgroundImage = '';
     }
-    var resultDiv = document.getElementById('imageCompareResult');
-    if (resultDiv) {
-        var oldUrl2 = resultDiv.style.backgroundImage;
-        var blobMatch2 = oldUrl2.match(/url\("?(blob:[^"]+)"?\)/);
-        if (blobMatch2) URL.revokeObjectURL(blobMatch2[1]);
-        resultDiv.style.backgroundImage = '';
+    // 清理结果图 <img> 的 blob URL
+    var resultImg = document.getElementById('resultImageImg');
+    if (resultImg) {
+        if (resultImg._blobUrl) {
+            URL.revokeObjectURL(resultImg._blobUrl);
+            resultImg._blobUrl = null;
+        }
+        resultImg.src = '';
     }
     // 重置面板 view 高度和显示状态
     var originalPanel = document.getElementById('originalPanel');
@@ -1169,31 +1171,31 @@ function showCompletion(task) {
         var resultPanel = document.getElementById('resultPanel');
         if (resultPanel) resultPanel.style.display = 'flex';
         
-        var resultDiv = document.getElementById('imageCompareResult');
+        var resultImg = document.getElementById('resultImageImg');
         var resultImageView = document.getElementById('resultImageView');
         
-        if (resultDiv && fileUrl) {
-            // 释放旧的 background-image blob URL
-            var oldUrl = resultDiv.style.backgroundImage;
-            var blobMatch = oldUrl.match(/url\("(blob:[^"]+)"\)/);
-            if (blobMatch) URL.revokeObjectURL(blobMatch[1]);
+        if (resultImg && fileUrl) {
+            // 释放旧的 blob URL
+            if (resultImg._blobUrl) {
+                URL.revokeObjectURL(resultImg._blobUrl);
+                resultImg._blobUrl = null;
+            }
             
-            // 用 fetch 下载结果图，转成 blob URL 再设置 background-image
-            // 这样确保图片完全加载后再显示
-            console.log('[RESULT] 开始下载结果图:', fileUrl);
+            console.log('[RESULT] 开始加载结果图:', fileUrl);
+            
+            // 用 fetch 下载结果图，转成 blob URL 再设 img.src
+            // 这样确保图片完全加载后再显示，且 <img> 的 object-fit:contain 能正确工作
             fetch(fileUrl).then(function(r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.blob();
             }).then(function(blob) {
                 var blobUrl = URL.createObjectURL(blob);
-                // 先加载图片获取尺寸，再设置 background-image 和 view 高度
-                var tmpImg = new Image();
-                tmpImg.onload = function() {
-                    var rw = tmpImg.naturalWidth, rh = tmpImg.naturalHeight;
+                resultImg._blobUrl = blobUrl;
+                
+                // 等待图片加载完成后再设置 view 高度
+                resultImg.onload = function() {
+                    var rw = resultImg.naturalWidth, rh = resultImg.naturalHeight;
                     console.log('[RESULT] 结果图尺寸:', rw, 'x', rh);
-                    
-                    // 设置 background-image（blob URL，已完全加载）
-                    resultDiv.style.backgroundImage = 'url("' + blobUrl + '")';
                     
                     // 根据结果图宽高比设置 resultImageView 的高度（宽度固定 720px）
                     if (resultImageView && rw > 0) {
@@ -1210,16 +1212,16 @@ function showCompletion(task) {
                     
                     console.log('[RESULT] 结果图显示完成');
                 };
-                tmpImg.onerror = function() {
+                resultImg.onerror = function() {
                     console.error('[RESULT] 结果图加载失败（blob URL）');
                     // 回退：直接用 fileUrl
-                    resultDiv.style.backgroundImage = 'url("' + fileUrl + '")';
+                    resultImg.src = fileUrl;
                 };
-                tmpImg.src = blobUrl;
+                resultImg.src = blobUrl;
             }).catch(function(e) {
                 console.error('[RESULT] 结果图下载失败:', e);
                 // 回退：直接用 fileUrl
-                resultDiv.style.backgroundImage = 'url("' + fileUrl + '")';
+                resultImg.src = fileUrl;
             });
         }
 
