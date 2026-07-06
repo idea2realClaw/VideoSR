@@ -1779,34 +1779,30 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
+    overflow: hidden; /* 关键：超出容器的部分裁掉 */
 }
 
 /* 调试边框：红色=原图层，绿色=结果图层 */
 .compare-original {
     outline: 2px dashed red;
+    z-index: 2;
 }
 .compare-result {
     outline: 2px dashed green;
+    z-index: 1;
 }
 
+/*
+ * 图片不再使用 object-fit: contain！
+ * 改由 JS 精确计算并直接设置 width/height/margin
+ * 确保原图和结果图像素级对齐
+ */
 .compare-original img,
 .compare-original video,
 .compare-result img,
 .compare-result video {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
     display: block;
-}
-
-/* 默认：仅显示原图层 */
-.compare-original {
-    z-index: 2;
-}
-
-/* 结果图层在下面 */
-.compare-result {
-    z-index: 1;
+    /* width/height/margin 由 JS 动态设置，不在此处固定 */
 }
 
 /* 激活对比模式后，原图层按滑块位置裁剪（右側透明） */

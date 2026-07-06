@@ -662,9 +662,6 @@ function showPreview(file, uploadResult) {
             var objectUrl = URL.createObjectURL(file);
             origImage.src = objectUrl;
             origImage.style.display = 'block';
-            origImage.style.objectFit = 'contain';
-            origImage.style.width = '100%';
-            origImage.style.height = '100%';
             console.log('Original image set:', objectUrl);
         }
         
@@ -673,9 +670,6 @@ function showPreview(file, uploadResult) {
         if (resultImage && origImage) {
             resultImage.src = origImage.src;
             resultImage.style.display = 'block';
-            resultImage.style.objectFit = 'contain';
-            resultImage.style.width = '100%';
-            resultImage.style.height = '100%';
         }
         var placeholder = document.getElementById('imageComparePlaceholder');
         if (placeholder) placeholder.style.display = 'none';
@@ -695,14 +689,18 @@ function showPreview(file, uploadResult) {
             if (origInfo) {
                 origInfo.innerHTML = '<div>文件名: ' + file.name + '</div><div>文件大小: ' + fileSize + '</div><div>尺寸: ' + img.width + ' × ' + img.height + ' 像素</div>';
             }
-            // 精确计算容器高度：宽度固定720px，按图片宽高比算高度
+            // ===== 精确设置容器尺寸和对齐图片（不用 object-fit: contain）=====
             var container = document.getElementById('imageCompareContainer');
             if (container && img.width > 0) {
-                var containerWidth = 720; // 与 CSS 一致
+                var containerWidth = 720; // 固定宽度（与 CSS 一致）
                 var containerHeight = Math.round(containerWidth * img.height / img.width);
                 container.style.width = containerWidth + 'px';
                 container.style.height = containerHeight + 'px';
-                container.style.aspectRatio = 'auto'; // 清除 aspect-ratio，直接用 width/height
+                
+                // 用统一的精确计算函数让图片填满容器
+                fitImageToContainer(document.getElementById('originalImage'), img.width, img.height, containerWidth, containerHeight);
+                fitImageToContainer(document.getElementById('resultImage'), img.width, img.height, containerWidth, containerHeight);
+                
                 console.log('[ORIG IMAGE] 容器尺寸设为:', containerWidth, 'x', containerHeight, '(原图:', img.width, 'x', img.height, ')');
             }
             // 打印原图实际像素和容器大小
@@ -1164,56 +1162,49 @@ function showCompletion(task) {
         
         var resultImage = document.getElementById('resultImage');
         var originalImage = document.getElementById('originalImage');
-        // 强制设置 object-fit: contain，防止 CSS 缓存或优先级问题
-        if (resultImage) {
-            resultImage.style.objectFit = 'contain';
-            resultImage.style.width = '100%';
-            resultImage.style.height = '100%';
-        }
-        if (originalImage) {
-            originalImage.style.objectFit = 'contain';
-            originalImage.style.width = '100%';
-            originalImage.style.height = '100%';
-        }
+        
         if (resultImage) {
             resultImage.onload = function() {
                 var placeholder = document.getElementById('imageComparePlaceholder');
                 if (placeholder) placeholder.style.display = 'none';
                 initCompareSlider('image');
-                // 检查原图和结果图宽高比是否一致（容器尺寸由原图加载时设定，这里不再重复设置）
+                
+                // ===== 用精确计算对齐结果图（和原图用同一个公式）=====
                 var rw = this.naturalWidth, rh = this.naturalHeight;
-                var origImage = document.getElementById('originalImage');
                 var container = document.getElementById('imageCompareContainer');
+                var cw = container ? container.offsetWidth : 720;
+                var ch = container ? container.offsetHeight : 0;
+                
+                // 调用统一的精确对齐函数
+                fitImageToContainer(this, rw, rh, cw, ch);
+                
+                // 检查宽高比
+                var origImage = document.getElementById('originalImage');
                 if (origImage && origImage.naturalWidth && origImage.naturalHeight) {
                     var origRatio = origImage.naturalWidth / origImage.naturalHeight;
                     var resultRatio = rw / rh;
                     if (Math.abs(origRatio - resultRatio) > 0.01) {
-                        console.warn('[WARN] 原图与结果图宽高比不一致！原图:', origRatio.toFixed(2), '结果:', resultRatio.toFixed(2));
+                        console.warn('[WARN] 宽高比不一致！原图:', origRatio.toFixed(2), '结果:', resultRatio.toFixed(2));
                         sendBackendLog('warn', '[WARN] 宽高比不一致 原图:' + origRatio.toFixed(2) + ' 结果:' + resultRatio.toFixed(2), 'completion');
                     } else {
-                        console.log('[RESULT IMAGE] 宽高比一致:', resultRatio.toFixed(2));
+                        console.log('[RESULT] 宽高比一致:', resultRatio.toFixed(2));
                     }
                 }
-                // 打印结果图实际像素和容器显示大小，以及两张图的实际渲染位置和尺寸
-                var cw = container ? container.offsetWidth : 0, ch = container ? container.offsetHeight : 0;
+                
+                // 打印调试信息
                 var containerRect = container ? container.getBoundingClientRect() : null;
                 var origRect = origImage ? origImage.getBoundingClientRect() : null;
                 var resultRect = this.getBoundingClientRect();
-                console.log('===== 图片重叠调试 =====');
-                console.log('[CONTAINER] 位置:', containerRect ? containerRect.left + ',' + containerRect.top : 'N/A', '尺寸:', cw + 'x' + ch);
-                console.log('[ORIGINAL IMG] 位置:', origRect ? origRect.left + ',' + origRect.top : 'N/A', '尺寸:', origRect ? origRect.width + 'x' + origRect.height : 'N/A', '像素:', origImage ? origImage.naturalWidth + 'x' + origImage.naturalHeight : 'N/A');
-                console.log('[RESULT IMG] 位置:', resultRect.left + ',' + resultRect.top, '尺寸:', resultRect.width + 'x' + resultRect.height, '像素:', rw + 'x' + rh);
+                console.log('===== 图片重叠检查 =====');
+                console.log('[CONTAINER]', cw + 'x' + ch);
+                console.log('[ORIG IMG]', origRect ? origRect.width + 'x' + origRect.height : 'N/A', '@', origRect ? Math.round(origRect.left - (containerRect ? containerRect.left : 0)) + ',' + Math.round(origRect.top - (containerRect ? containerRect.top : 0)) : 'N/A');
+                console.log('[RESULT IMG]', resultRect.width + 'x' + resultRect.height, '@', Math.round(resultRect.left - (containerRect ? containerRect.left : 0)) + ',' + Math.round(resultRect.top - (containerRect ? containerRect.top : 0)));
                 if (origRect && resultRect) {
                     var posDiff = Math.abs(origRect.left - resultRect.left) + Math.abs(origRect.top - resultRect.top);
                     var sizeDiff = Math.abs(origRect.width - resultRect.width) + Math.abs(origRect.height - resultRect.height);
-                    console.log('[OVERLAP CHECK] 位置偏差:', posDiff, 'px | 尺寸偏差:', sizeDiff, 'px');
-                    if (posDiff > 1 || sizeDiff > 1) {
-                        console.warn('[WARN] 两张图没有完全重叠！请截图发给我');
-                    } else {
-                        console.log('[OK] 两张图完全重叠');
-                    }
+                    console.log('[OVERLAP] 偏差: pos=' + posDiff + 'px size=' + sizeDiff + 'px', posDiff <= 1 && sizeDiff <= 1 ? '✅ 对齐' : '❌ 未对齐');
                 }
-                console.log('===== 调试结束 =====');
+                console.log('===== 检查结束 =====');
                 sendBackendLog('info', '[RESULT] 结果图:' + rw + 'x' + rh + ' 容器:' + cw + 'x' + ch, 'completion');
             };
             resultImage.onerror = function() {
@@ -1439,6 +1430,46 @@ function hideLoading() {
 console.log('VideoSR app.js loaded');
 
 // ==========================================
+// ==========================================
+// 图片精确对齐函数（替代 object-fit: contain）
+// 用 JS 精确计算每张图的显示尺寸和 margin
+// 确保原图和结果图使用完全相同的公式，像素级对齐
+// ==========================================
+/**
+ * 将图片精确对齐到容器中（类似 object-fit: contain 但完全由 JS 控制）
+ * @param {HTMLImageElement} img - 要设置的 <img> 元素
+ * @param {number} naturalWidth - 图片原始像素宽度
+ * @param {number} naturalHeight - 图片原始像素高度
+ * @param {number} containerWidth - 容器宽度 (px)
+ * @param {number} containerHeight - 容器高度 (px)
+ */
+function fitImageToContainer(img, naturalWidth, naturalHeight, containerWidth, containerHeight) {
+    if (!img || naturalWidth <= 0 || naturalHeight <= 0 || containerWidth <= 0 || containerHeight <= 0) return;
+    
+    // 计算缩放比例：保持宽高比，完整显示在容器内
+    var scale = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
+    
+    // 计算实际显示尺寸
+    var displayWidth = Math.round(naturalWidth * scale);
+    var displayHeight = Math.round(naturalHeight * scale);
+    
+    // 计算居中偏移
+    var marginLeft = Math.round((containerWidth - displayWidth) / 2);
+    var marginTop = Math.round((containerHeight - displayHeight) / 2);
+    
+    // 直接设置所有样式（不依赖 object-fit）
+    img.style.width = displayWidth + 'px';
+    img.style.height = displayHeight + 'px';
+    img.style.marginLeft = marginLeft + 'px';
+    img.style.marginTop = marginTop + 'px';
+    img.style.objectFit = 'none'; // 禁用 object-fit，完全由 JS 控制
+    
+    console.log('[fitImage] 像素:' + naturalWidth + 'x' + naturalHeight +
+                ' → 显示:' + displayWidth + 'x' + displayHeight +
+                ' | margin:' + marginLeft + ',' + marginTop +
+                ' | scale:' + scale.toFixed(4));
+}
+
 // 对比滑动条功能
 // ==========================================
 var compareSliders = {};
