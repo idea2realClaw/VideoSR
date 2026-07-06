@@ -14,6 +14,7 @@ from pathlib import Path
 from datetime import datetime
 import os
 import sys
+import subprocess
 import numpy as np
 import cv2
 from PIL import Image
@@ -711,6 +712,45 @@ def process_video_task(task_id):
             if os.path.exists(str(output_path)):
                 os.remove(str(output_path))
             os.rename(str(temp_output_path), str(output_path))
+        
+        # 重编码为 H.264（浏览器兼容），原文件可能是 mp4v 浏览器不支持的编码
+        if os.path.exists(str(output_path)):
+            try:
+                # 查找 ffmpeg
+                ffmpeg_path = None
+                if os.name == 'nt':  # Windows 特定路径
+                    for p in [
+                        r"C:\Users\zhuxi\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin\ffmpeg.exe",
+                    ]:
+                        if os.path.exists(p):
+                            ffmpeg_path = p
+                            break
+                else:
+                    import shutil
+                    ffmpeg_path = shutil.which("ffmpeg")
+                
+                if ffmpeg_path:
+                    h264_tmp = str(output_path) + ".h264.mp4"
+                    r = subprocess.run([
+                        ffmpeg_path, "-i", str(output_path),
+                        "-c:v", "libx264",
+                        "-preset", "fast",
+                        "-crf", "23",
+                        "-pix_fmt", "yuv420p",
+                        "-y", h264_tmp
+                    ], capture_output=True, timeout=300)
+                    if r.returncode == 0 and os.path.exists(h264_tmp):
+                        os.remove(str(output_path))
+                        os.rename(h264_tmp, str(output_path))
+                        print(f"  H.264 re-encode done: {output_path.name}")
+                    else:
+                        print(f"  WARN: ffmpeg re-encode failed (rc={r.returncode}), using original")
+                        if os.path.exists(h264_tmp):
+                            os.remove(h264_tmp)
+                else:
+                    print(f"  WARN: ffmpeg not found, using original file (may not play in browser)")
+            except Exception as e:
+                print(f"  WARN: ffmpeg re-encode error: {e}, using original file")
         
         # 计算处理时间
         processing_time = (datetime.now() - datetime.fromisoformat(task['startedAt'])).total_seconds()

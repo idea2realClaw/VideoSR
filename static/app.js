@@ -1210,24 +1210,81 @@ function showCompletion(task) {
 
         var resultVideo = document.getElementById('resultVideo');
         var rvInfo = document.getElementById('resultVideoInfo');
-        // 立即显示文件名与分辨率，不依赖 onloadeddata
-        if (rvInfo) {
-            rvInfo.innerHTML = '<div>文件: ' + fileName + '</div><div>分辨率: ' + (task.outputResolution || '未知') + '</div>';
-        }
-        if (resultVideo) {
-            resultVideo.onloadeddata = function() {
-                var dur = resultVideo.duration || 0;
-                if (rvInfo && dur > 0) {
-                    rvInfo.innerHTML += '<div>时长: ' + Math.floor(dur) + ' 秒</div>';
-                }
-            };
-            resultVideo.src = fileUrl;
-            resultVideo.load();
-        }
+        var origVideo = document.getElementById('originalVideo');
 
         // 绑定增强后视频播放工具条
         setupVideoControls('resultVideo', 'resultVideoPlay', 'resultVideoStop',
                             'resultVideoProgress', 'resultVideoProgressFilled', 'resultVideoTime');
+
+        // 第一阶段：先用原始视频验证播放器，播放结束后自动加载增强视频
+        if (origVideo && origVideo.src) {
+            // 显示测试状态
+            if (rvInfo) {
+                rvInfo.innerHTML = '<div class="video-loading-status">🔍 正在用原始视频验证播放器...</div>'
+                    + '<div>增强文件: ' + fileName + '</div>'
+                    + '<div>分辨率: ' + (task.outputResolution || '未知') + '</div>'
+                    + '<div class="video-loading-hint">⏳ 播放完原始视频后自动加载增强视频</div>';
+            }
+
+            // 加载原始视频 blob URL 到结果面板（已知可播）
+            resultVideo.src = origVideo.src;
+            resultVideo.load();
+
+            // 移除旧的 ended 监听避免重复绑定，一次性加载增强视频
+            var _enhancedHandler = function _enhancedLoad() {
+                console.log('Original playback ended, loading enhanced video:', fileUrl);
+                sendBackendLog('info', 'Original ended → loading enhanced: ' + fileUrl, 'playback');
+
+                // 切换到增强视频
+                resultVideo.src = fileUrl;
+                resultVideo.load();
+
+                // 更新信息
+                if (rvInfo) {
+                    rvInfo.innerHTML = '<div>文件: ' + fileName + '</div>'
+                        + '<div>分辨率: ' + (task.outputResolution || '未知') + '</div>'
+                        + '<div class="video-loading-status">✅ 增强视频已加载，点击 ▶ 播放</div>';
+                }
+
+                // 增强视频加载完成时显示时长
+                resultVideo.onloadeddata = function() {
+                    var dur = resultVideo.duration || 0;
+                    if (rvInfo && dur > 0) {
+                        rvInfo.innerHTML += '<div>时长: ' + Math.floor(dur) + ' 秒</div>';
+                    }
+                };
+
+                // 增强视频加载失败时显示诊断信息
+                resultVideo.onerror = function() {
+                    var errMsg = resultVideo.error ? resultVideo.error.message : '未知错误';
+                    console.error('Enhanced video load error:', errMsg);
+                    sendBackendLog('error', 'Enhanced video load error: ' + errMsg, 'playback');
+                    showToast('error', '增强视频加载失败，文件编码可能不被浏览器支持');
+                    if (rvInfo) {
+                        rvInfo.innerHTML += '<div class="video-loading-error">❌ 增强视频加载失败（浏览器不支持此编码格式）</div>';
+                    }
+                };
+            }
+            // 移除旧绑定（防止多次 showCompletion 叠加）
+            resultVideo.removeEventListener('ended', _enhancedHandler);
+            resultVideo.addEventListener('ended', _enhancedHandler);
+
+        } else {
+            // 异常回退：直接加载增强视频
+            if (rvInfo) {
+                rvInfo.innerHTML = '<div>文件: ' + fileName + '</div><div>分辨率: ' + (task.outputResolution || '未知') + '</div>';
+            }
+            if (resultVideo) {
+                resultVideo.onloadeddata = function() {
+                    var dur = resultVideo.duration || 0;
+                    if (rvInfo && dur > 0) {
+                        rvInfo.innerHTML += '<div>时长: ' + Math.floor(dur) + ' 秒</div>';
+                    }
+                };
+                resultVideo.src = fileUrl;
+                resultVideo.load();
+            }
+        }
     } else {
         // 显示结果图片（Upscayl 风格：重叠对比滑块）
         var resultDiv = document.getElementById('imageCompareResult');
