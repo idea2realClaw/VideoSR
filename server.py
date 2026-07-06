@@ -618,6 +618,8 @@ def process_video_task(task_id):
         t_start = time.time()
         frame_idx = 0
         npu_count = 0
+        t_npu_total = 0.0
+        t_flow_total = 0.0
         
         # 读取第一帧
         ret, frame0 = cap.read()
@@ -625,7 +627,9 @@ def process_video_task(task_id):
             raise Exception("视频没有帧")
         
         # 第一帧：NPU 推理
+        _t0 = time.time()
         sr0 = npu_engine.upsample(frame0)
+        t_npu_total += time.time() - _t0
         out.write(_fit_to_output(sr0, dst_w, dst_h))
         npu_count += 1
         frame_idx = 1
@@ -657,13 +661,17 @@ def process_video_task(task_id):
             
             if ret2:
                 # NPU 推理偶数帧
+                _t0 = time.time()
                 sr_next = npu_engine.upsample(orig_next)
+                t_npu_total += time.time() - _t0
                 npu_count += 1
                 
                 # 光流运动补偿插值奇数帧
+                _t1 = time.time()
                 mid_frame = motion_compensated_interpolation(
                     prev_sr, sr_next, prev_orig, orig_next, scale=SCALE
                 )
+                t_flow_total += time.time() - _t1
                 
                 # 写入奇数帧（插值）
                 out.write(_fit_to_output(mid_frame, dst_w, dst_h))
@@ -671,7 +679,7 @@ def process_video_task(task_id):
                 
                 # 写入偶数帧（NPU）
                 out.write(_fit_to_output(sr_next, dst_w, dst_h))
-                frame_idx += 2
+                frame_idx += 1
                 
                 # 更新状态
                 prev_sr = sr_next
@@ -684,7 +692,7 @@ def process_video_task(task_id):
                 break
             
             # 更新进度
-            if frame_idx % 10 == 0:
+            if True:  # 每轮更新进度（去掉 %10 阶梯节流，平滑显示）
                 progress = 10 + int(80 * frame_idx / total_frames)
                 elapsed = time.time() - t_start
                 eta = (elapsed / frame_idx) * (total_frames - frame_idx) if frame_idx > 0 else 0
@@ -711,7 +719,10 @@ def process_video_task(task_id):
                    completedAt=datetime.now().isoformat())
         
         print(f"视频任务 {task_id} 完成，耗时 {processing_time:.2f} 秒")
-        print(f"  NPU 推理次数: {npu_count}")
+        print(f"  NPU(upsample) 推理次数: {npu_count}")
+        print(f"  NPU(upsample) 总耗时: {t_npu_total:.2f} 秒, 平均: {(t_npu_total/npu_count if npu_count else 0):.3f} 秒/次")
+        print(f"  光流合成总耗时: {t_flow_total:.2f} 秒")
+        print(f"  其他(IO/resize/融合): {processing_time - t_npu_total - t_flow_total:.2f} 秒")
         
     except Exception as e:
         print(f"Video task {task_id} error: {e}")

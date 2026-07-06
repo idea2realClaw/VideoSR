@@ -1087,6 +1087,9 @@ function startProgressPolling() {
     if (AppState.progressInterval) {
         clearInterval(AppState.progressInterval);
     }
+    // 重置日志去重标记（避免跨任务沿用旧的状态/进度）
+    AppState._lastLogStatus = null;
+    AppState._lastLogProgress = null;
     
     AppState.progressInterval = setInterval(async function() {
         if (!AppState.currentTaskId) return;
@@ -1100,7 +1103,12 @@ function startProgressPolling() {
             }
             
             const task = result.task;
-            Logger.info(`进度更新: ${task.status}, ${task.progress}%`);
+            // 仅在状态或进度真正变化时才打印，避免相同值反复刷屏
+            if (AppState._lastLogStatus !== task.status || AppState._lastLogProgress !== task.progress) {
+                Logger.info(`进度更新: ${task.status}, ${task.progress}%`);
+                AppState._lastLogStatus = task.status;
+                AppState._lastLogProgress = task.progress;
+            }
             
             updateProgress(task);
             
