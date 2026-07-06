@@ -1781,6 +1781,14 @@ body {
     height: 100%;
 }
 
+/* 调试边框：红色=原图层，绿色=结果图层 */
+.compare-original {
+    outline: 2px dashed red;
+}
+.compare-result {
+    outline: 2px dashed green;
+}
+
 .compare-original img,
 .compare-original video,
 .compare-result img,

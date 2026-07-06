@@ -1194,13 +1194,26 @@ function showCompletion(task) {
                         console.log('[RESULT IMAGE] 宽高比一致:', resultRatio.toFixed(2));
                     }
                 }
-                // 打印结果图实际像素和容器显示大小，以及两张图的实际渲染尺寸
+                // 打印结果图实际像素和容器显示大小，以及两张图的实际渲染位置和尺寸
                 var cw = container ? container.offsetWidth : 0, ch = container ? container.offsetHeight : 0;
-                var computedOrig = origImage ? window.getComputedStyle(origImage) : null;
-                var computedResult = window.getComputedStyle(this);
-                console.log('[RESULT IMAGE] naturalSize:', rw, 'x', rh, '| containerSize:', cw, 'x', ch);
-                console.log('[RESULT IMAGE] 原图渲染尺寸:', computedOrig ? computedOrig.width + 'x' + computedOrig.height : 'N/A');
-                console.log('[RESULT IMAGE] 结果图渲染尺寸:', computedResult.width + 'x' + computedResult.height);
+                var containerRect = container ? container.getBoundingClientRect() : null;
+                var origRect = origImage ? origImage.getBoundingClientRect() : null;
+                var resultRect = this.getBoundingClientRect();
+                console.log('===== 图片重叠调试 =====');
+                console.log('[CONTAINER] 位置:', containerRect ? containerRect.left + ',' + containerRect.top : 'N/A', '尺寸:', cw + 'x' + ch);
+                console.log('[ORIGINAL IMG] 位置:', origRect ? origRect.left + ',' + origRect.top : 'N/A', '尺寸:', origRect ? origRect.width + 'x' + origRect.height : 'N/A', '像素:', origImage ? origImage.naturalWidth + 'x' + origImage.naturalHeight : 'N/A');
+                console.log('[RESULT IMG] 位置:', resultRect.left + ',' + resultRect.top, '尺寸:', resultRect.width + 'x' + resultRect.height, '像素:', rw + 'x' + rh);
+                if (origRect && resultRect) {
+                    var posDiff = Math.abs(origRect.left - resultRect.left) + Math.abs(origRect.top - resultRect.top);
+                    var sizeDiff = Math.abs(origRect.width - resultRect.width) + Math.abs(origRect.height - resultRect.height);
+                    console.log('[OVERLAP CHECK] 位置偏差:', posDiff, 'px | 尺寸偏差:', sizeDiff, 'px');
+                    if (posDiff > 1 || sizeDiff > 1) {
+                        console.warn('[WARN] 两张图没有完全重叠！请截图发给我');
+                    } else {
+                        console.log('[OK] 两张图完全重叠');
+                    }
+                }
+                console.log('===== 调试结束 =====');
                 sendBackendLog('info', '[RESULT] 结果图:' + rw + 'x' + rh + ' 容器:' + cw + 'x' + ch, 'completion');
             };
             resultImage.onerror = function() {
