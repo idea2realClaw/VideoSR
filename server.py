@@ -174,7 +174,7 @@ class NPUSuperResEngine:
         out_h = orig_h * SCALE
         # 用 float64 累加避免精度问题，最后转 uint8
         result_accum = np.zeros((out_h, out_w, 3), dtype=np.float64)
-        result_weight = np.zeros((out_h, out_w, 1), dtype=np.float64)
+        result_weight = np.zeros((out_h, out_w, 3), dtype=np.float64)
 
         tile_size = IMAGE_SIZE       # 512（模型输入）
         out_tile  = tile_size * SCALE  # 2048（模型输出）
@@ -182,6 +182,9 @@ class NPUSuperResEngine:
 
         # 计算分块位置（带重叠，最后一块对齐右/下边缘，无重复）
         def _tile_positions(dim, tile, ov):
+            # 单边尺寸小于一块时，只取一块（从 0 开始；crop 时由 PIL 自动补黑边）
+            if dim <= tile:
+                return [0]
             pos = []
             step = tile - ov
             p = 0
@@ -189,8 +192,10 @@ class NPUSuperResEngine:
                 pos.append(p)
                 p += step
             # 最后一块对齐边缘
-            if not pos or pos[-1] + tile < dim:
-                pos.append(dim - tile)
+            if pos[-1] + tile < dim:
+                last = dim - tile
+                if last not in pos:
+                    pos.append(last)
             # 去重（保序）
             seen = set()
             unique = []
@@ -205,9 +210,9 @@ class NPUSuperResEngine:
 
         for y in y_positions:
             for x in x_positions:
-                # 取 512x512 块（边缘块自动左移/上移取完整块）
-                x_start = min(x, orig_w - tile_size)
-                y_start = min(y, orig_h - tile_size)
+                # 取 512x512 块（边缘块左移/上移取完整块；小于512时从0开始，PIL补黑边）
+                x_start = max(0, min(x, orig_w - tile_size))
+                y_start = max(0, min(y, orig_h - tile_size))
                 tile = orig_image.crop((x_start, y_start, x_start + tile_size, y_start + tile_size))
 
                 # NPU 推理（输出 2048x2048）
@@ -246,9 +251,8 @@ class NPUSuperResEngine:
                 result_weight[out_y:ry_end, out_x:rx_end] += weight_3d[:ry_end-out_y, :rx_end-out_x]
 
         # 归一化（除权重）
-        result_weight_3 = np.repeat(result_weight, 3, axis=2)
-        result_weight_3[result_weight_3 == 0] = 1.0  # 避免除零
-        result_final = (result_accum / result_weight_3 * 255.0).clip(0, 255).astype(np.uint8)
+        result_weight[result_weight == 0] = 1.0  # 避免除零
+        result_final = (result_accum / result_weight * 255.0).clip(0, 255).astype(np.uint8)
 
         result_bgr = cv2.cvtColor(result_final, cv2.COLOR_RGB2BGR)
         return result_bgr
