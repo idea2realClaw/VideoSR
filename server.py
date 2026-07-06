@@ -522,6 +522,13 @@ def process_image_task(task_id):
 # ==========================================
 # 视频超分处理（真实 NPU 加速）
 # ==========================================
+def _fit_to_output(frame, dst_w, dst_h):
+    """把超分后的帧缩放到编码器目标尺寸（max-resolution 限制可能使 dst 小于 x4 输出）"""
+    if frame.shape[1] != dst_w or frame.shape[0] != dst_h:
+        frame = cv2.resize(frame, (dst_w, dst_h), interpolation=cv2.INTER_AREA)
+    return frame
+
+
 def process_video_task(task_id):
     """视频超分处理任务（NPU加速版，使用光流运动补偿插值）"""
     task = get_task(task_id)
@@ -540,7 +547,6 @@ def process_video_task(task_id):
         
         file_path = task['filePath']
         settings = task['settings']
-        scale = settings.get('scale', 4)
         use_npu = settings.get('useNpu', True) and npu_engine.npu_available
         
         # 打开视频
@@ -552,7 +558,7 @@ def process_video_task(task_id):
         src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        dst_w, dst_h = src_w * scale, src_h * scale
+        dst_w, dst_h = src_w * SCALE, src_h * SCALE  # 模型固定输出 x4，必须用 SCALE
         
         # 限制输出分辨率（最大 1920x1080）
         max_w, max_h = 1920, 1080
@@ -567,7 +573,7 @@ def process_video_task(task_id):
         
         print(f"视频超分: {src_w}x{src_h} -> {dst_w}x{dst_h}")
         
-        print(f"视频超分: {src_w}x{src_h} -> {dst_w}x{dst_h} ({scale}x)")
+        print(f"视频超分: {src_w}x{src_h} -> {dst_w}x{dst_h} ({SCALE}x)")
         print(f"总帧数: {total_frames}, FPS: {fps:.2f}")
         
         update_task(task_id, 
@@ -577,7 +583,7 @@ def process_video_task(task_id):
                    outputResolution=f"{dst_w}x{dst_h}")
         
         # 尝试创建 VideoWriter，如果失败则报错
-        output_filename = f"videosr_{task_id}_{scale}x.mp4"
+        output_filename = f"videosr_{task_id}_{SCALE}x.mp4"
         temp_output_path = OUTPUT_DIR / f"temp_{output_filename}"
         output_path = OUTPUT_DIR / output_filename
         
@@ -597,7 +603,7 @@ def process_video_task(task_id):
             if test_out.isOpened():
                 out = test_out
                 temp_output_path = test_path
-                output_path = OUTPUT_DIR / f"videosr_{task_id}_{scale}x.{ext}"
+                output_path = OUTPUT_DIR / f"videosr_{task_id}_{SCALE}x.{ext}"
                 print(f"VideoWriter created with {fourcc_code}")
                 break
             else:
@@ -620,7 +626,7 @@ def process_video_task(task_id):
         
         # 第一帧：NPU 推理
         sr0 = npu_engine.upsample(frame0)
-        out.write(sr0)
+        out.write(_fit_to_output(sr0, dst_w, dst_h))
         npu_count += 1
         frame_idx = 1
         
@@ -656,15 +662,15 @@ def process_video_task(task_id):
                 
                 # 光流运动补偿插值奇数帧
                 mid_frame = motion_compensated_interpolation(
-                    prev_sr, sr_next, prev_orig, orig_next, scale=scale
+                    prev_sr, sr_next, prev_orig, orig_next, scale=SCALE
                 )
                 
                 # 写入奇数帧（插值）
-                out.write(mid_frame)
+                out.write(_fit_to_output(mid_frame, dst_w, dst_h))
                 frame_idx += 1
                 
                 # 写入偶数帧（NPU）
-                out.write(sr_next)
+                out.write(_fit_to_output(sr_next, dst_w, dst_h))
                 frame_idx += 2
                 
                 # 更新状态
@@ -673,7 +679,7 @@ def process_video_task(task_id):
                 
             else:
                 # 最后一帧（奇数），复制前一帧的 SR 结果
-                out.write(prev_sr)
+                out.write(_fit_to_output(prev_sr, dst_w, dst_h))
                 frame_idx += 1
                 break
             
