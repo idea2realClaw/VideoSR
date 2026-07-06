@@ -691,10 +691,10 @@ function showPreview(file, uploadResult) {
             var infoHtml = '<div>文件名: ' + file.name + '</div>'
                 + '<div>文件大小: ' + fileSize + '</div>'
                 + '<div>尺寸: ' + img.width + ' × ' + img.height + ' 像素</div>';
-            // 超过 1024x1024 提示：图像已足够清晰，可能不需要超分
-            var tooLarge = (img.width > 1024 || img.height > 1024);
+            // 超过 1024x1024 提示：两条边都超过 1024 才算尺寸足够大
+            var tooLarge = (img.width > 1024 && img.height > 1024);
             if (tooLarge) {
-                infoHtml += '<div class="image-too-large-warn">⚠️ 尺寸超过 1024×1024，已足够清晰，可能不需要超分</div>';
+                infoHtml += '<div class="image-too-large-warn">⚠️ 宽高均超过 1024，已足够清晰，可能不需要超分</div>';
             }
             if (origInfo) origInfo.innerHTML = infoHtml;
             // 设置容器高度（按图片宽高比）
@@ -705,7 +705,7 @@ function showPreview(file, uploadResult) {
             }
             sendBackendLog('info', '[ORIG] 原图:' + img.width + 'x' + img.height, 'preview');
             if (tooLarge) {
-                showToast('warning', '图像尺寸 ' + img.width + ' × ' + img.height + ' 已超过 1024×1024，已足够清晰，可能不需要超分处理');
+                showToast('warning', '图像尺寸 ' + img.width + ' × ' + img.height + ' 宽高均超过 1024×1024，已足够清晰，可能不需要超分处理');
             }
         };
         img.src = URL.createObjectURL(file);
