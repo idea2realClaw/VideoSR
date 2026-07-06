@@ -152,7 +152,7 @@ class NPUSuperResEngine:
     
     def upsample(self, frame_bgr):
         """
-        使用 NPU 进行超分
+        使用 NPU 进行超分（支持任意尺寸，自动分块处理，带重叠融合）
         frame_bgr: BGR numpy array (H, W, 3)
         returns: BGR numpy array at 4x resolution
         """
@@ -161,43 +161,117 @@ class NPUSuperResEngine:
             h, w = frame_bgr.shape[:2]
             new_h, new_w = h * SCALE, w * SCALE
             return cv2.resize(frame_bgr, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
-        
-        # NPU 推理
+
         from qai_appbuilder import PerfProfile
-        
-        # BGR -> RGB
+
+        # BGR -> RGB -> PIL
         rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         orig_image = Image.fromarray(rgb)
         orig_w, orig_h = orig_image.size
-        
-        # Resize + pad to 512x512
-        image, scale, padding = self._resize_pad(orig_image, (IMAGE_SIZE, IMAGE_SIZE))
-        
-        # 预处理
-        image_np = np.array(image).astype(np.float32)
-        image_np = np.clip(image_np, 0, 255) / 255.0
-        image_np = np.expand_dims(image_np, axis=0)
-        
-        # NPU 推理
-        self.PerfProfile.SetPerfProfileGlobal(PerfProfile.BURST)
-        output = self.model.Inference([image_np])[0]
-        self.PerfProfile.RelPerfProfileGlobal()
-        
-        # 后处理
+
+        # 输出画布（4x 尺寸）
+        out_w = orig_w * SCALE
+        out_h = orig_h * SCALE
+        # 用 float64 累加避免精度问题，最后转 uint8
+        result_accum = np.zeros((out_h, out_w, 3), dtype=np.float64)
+        result_weight = np.zeros((out_h, out_w, 1), dtype=np.float64)
+
+        tile_size = IMAGE_SIZE       # 512（模型输入）
+        out_tile  = tile_size * SCALE  # 2048（模型输出）
+        overlap   = 32               # 重叠像素（输入侧），输出侧 = 32*4 = 128
+
+        # 计算分块位置（带重叠，最后一块对齐右/下边缘，无重复）
+        def _tile_positions(dim, tile, ov):
+            pos = []
+            step = tile - ov
+            p = 0
+            while p + tile <= dim:
+                pos.append(p)
+                p += step
+            # 最后一块对齐边缘
+            if not pos or pos[-1] + tile < dim:
+                pos.append(dim - tile)
+            # 去重（保序）
+            seen = set()
+            unique = []
+            for p in pos:
+                if p not in seen:
+                    seen.add(p)
+                    unique.append(p)
+            return unique
+
+        x_positions = _tile_positions(orig_w, tile_size, overlap)
+        y_positions = _tile_positions(orig_h, tile_size, overlap)
+
+        for y in y_positions:
+            for x in x_positions:
+                # 取 512x512 块（边缘块自动左移/上移取完整块）
+                x_start = min(x, orig_w - tile_size)
+                y_start = min(y, orig_h - tile_size)
+                tile = orig_image.crop((x_start, y_start, x_start + tile_size, y_start + tile_size))
+
+                # NPU 推理（输出 2048x2048）
+                tile_sr = self._infer_tile(tile, PerfProfile)
+
+                # 计算输出图上对应的位置（4x）
+                out_x = x * SCALE
+                out_y = y * SCALE
+
+                # 生成融合权重（重叠区线性过渡，边界处权重=1）
+                w_out = tile_sr.width
+                h_out = tile_sr.height
+                ov_out = overlap * SCALE  # 128
+                x_blend = np.ones(w_out, dtype=np.float32)
+                y_blend = np.ones(h_out, dtype=np.float32)
+                if ov_out > 1:
+                    # 左边界不是图像边界时，左侧 overlap 区权重从 0→1
+                    if x_start > 0:
+                        x_blend[:ov_out] = np.linspace(0, 1, ov_out)
+                    # 右边界不是图像边界时，右侧 overlap 区权重从 1→0
+                    if x_start + tile_size < orig_w:
+                        x_blend[-ov_out:] = np.linspace(1, 0, ov_out)
+                    if y_start > 0:
+                        y_blend[:ov_out] = np.linspace(0, 1, ov_out)
+                    if y_start + tile_size < orig_h:
+                        y_blend[-ov_out:] = np.linspace(1, 0, ov_out)
+                weight_2d = (y_blend[:, None] * x_blend[None, :]).astype(np.float64)
+                weight_3d = np.repeat(weight_2d[:, :, None], 3, axis=2)
+
+                sr_np = np.array(tile_sr).astype(np.float64) / 255.0
+
+                # 累加到结果画布
+                ry_end = min(out_y + h_out, out_h)
+                rx_end = min(out_x + w_out, out_w)
+                result_accum[out_y:ry_end, out_x:rx_end] += sr_np[:ry_end-out_y, :rx_end-out_x] * weight_3d[:ry_end-out_y, :rx_end-out_x]
+                result_weight[out_y:ry_end, out_x:rx_end] += weight_3d[:ry_end-out_y, :rx_end-out_x]
+
+        # 归一化（除权重）
+        result_weight_3 = np.repeat(result_weight, 3, axis=2)
+        result_weight_3[result_weight_3 == 0] = 1.0  # 避免除零
+        result_final = (result_accum / result_weight_3 * 255.0).clip(0, 255).astype(np.uint8)
+
+        result_bgr = cv2.cvtColor(result_final, cv2.COLOR_RGB2BGR)
+        return result_bgr
+
+    def _infer_tile(self, image, PerfProfile):
+        """NPU 推理单个 512x512 块，返回 2048x2048 PIL Image"""
+        # 确保是 512x512
+        if image.size != (IMAGE_SIZE, IMAGE_SIZE):
+            resized = Image.new('RGB', (IMAGE_SIZE, IMAGE_SIZE), (0, 0, 0))
+            resized.paste(image, (0, 0))
+            image = resized
+
+        img_np = np.array(image).astype(np.float32) / 255.0
+        img_np = np.expand_dims(img_np, axis=0)
+
+        PerfProfile.SetPerfProfileGlobal(PerfProfile.BURST)
+        output = self.model.Inference([img_np])[0]
+        PerfProfile.RelPerfProfileGlobal()
+
         output = output.reshape(IMAGE_SIZE * SCALE, IMAGE_SIZE * SCALE, 3)
         output = np.clip(output, 0.0, 1.0)
         output = (output * 255).astype(np.uint8)
-        output_image = Image.fromarray(output)
-        
-        # Undo resize + pad
-        new_size = (orig_w * SCALE, orig_h * SCALE)
-        new_padding = (padding[0] * SCALE, padding[1] * SCALE)
-        final_image = self._undo_resize_pad(output_image, new_size, scale, new_padding)
-        
-        # RGB -> BGR
-        final_rgb = np.array(final_image)
-        final_bgr = cv2.cvtColor(final_rgb, cv2.COLOR_RGB2BGR)
-        return final_bgr
+        return Image.fromarray(output)
     
     def _resize_pad(self, image, dst_size):
         """Resize and pad image to dst_size (PIL-only, no torch)"""
