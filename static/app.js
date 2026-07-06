@@ -652,24 +652,24 @@ function showPreview(file, uploadResult) {
             Elements.videoPreviewSection.style.display = 'none';
         }
         
-        // 设置原始图片预览
-        var origImage = document.getElementById('originalImage');
-        if (origImage) {
-            // 释放旧的 Object URL
-            if (origImage.src && origImage.src.startsWith('blob:')) {
-                URL.revokeObjectURL(origImage.src);
-            }
+        // 设置原始图片预览（用 background-image 确保两张图 100% 对齐）
+        var origDiv = document.getElementById('originalImageBg');
+        if (origDiv) {
             var objectUrl = URL.createObjectURL(file);
-            origImage.src = objectUrl;
-            origImage.style.display = 'block';
-            console.log('Original image set:', objectUrl);
+            // 释放旧的 background-image URL
+            var oldUrl = origDiv.style.backgroundImage;
+            if (oldUrl && oldUrl.indexOf('blob:') >= 0) {
+                var match = oldUrl.match(/url\("?(blob:[^"]+)"?\)/);
+                if (match) URL.revokeObjectURL(match[1]);
+            }
+            origDiv.style.backgroundImage = 'url("' + objectUrl + '")';
+            console.log('Original image set as background:', objectUrl);
         }
         
-        // 立即显示对比滑动条：左右都显示原始图片
-        var resultImage = document.getElementById('resultImage');
-        if (resultImage && origImage) {
-            resultImage.src = origImage.src;
-            resultImage.style.display = 'block';
+        // 立即显示对比滑动条：结果图层先显示原始图片
+        var resultDiv = document.getElementById('imageCompareResult');
+        if (resultDiv && origDiv) {
+            resultDiv.style.backgroundImage = origDiv.style.backgroundImage;
         }
         var placeholder = document.getElementById('imageComparePlaceholder');
         if (placeholder) placeholder.style.display = 'none';
@@ -1161,59 +1161,54 @@ function showCompletion(task) {
         var container = document.getElementById('imageCompareContainer');
         if (container) container.classList.add('comparing');
         
-        var resultImage = document.getElementById('resultImage');
-        var originalImage = document.getElementById('originalImage');
+                // 结果图用 background-image 设置（和原图用相同渲染方式，100% 对齐）
+        var resultDiv = document.getElementById('imageCompareResult');
+        var origDiv = document.getElementById('originalImageBg');
         
-        if (resultImage) {
-            resultImage.onload = function() {
-                var placeholder = document.getElementById('imageComparePlaceholder');
-                if (placeholder) placeholder.style.display = 'none';
-                initCompareSlider('image');
-                
-                // 清除结果图内联样式，让 CSS object-fit:contain 生效（和原图一致）
-                this.style.objectFit = '';
-                this.style.width = '';
-                this.style.height = '';
-                this.style.margin = '';
-                
-                var rw = this.naturalWidth, rh = this.naturalHeight;
-                var container = document.getElementById('imageCompareContainer');
-                
-                // 检查宽高比
-                var origImage = document.getElementById('originalImage');
-                if (origImage && origImage.naturalWidth && origImage.naturalHeight) {
-                    var origRatio = origImage.naturalWidth / origImage.naturalHeight;
-                    var resultRatio = rw / rh;
-                    if (Math.abs(origRatio - resultRatio) > 0.01) {
-                        console.warn('[WARN] 宽高比不一致！原图:', origRatio.toFixed(2), '结果:', resultRatio.toFixed(2));
-                        sendBackendLog('warn', '[WARN] 宽高比不一致 原图:' + origRatio.toFixed(2) + ' 结果:' + resultRatio.toFixed(2), 'completion');
-                    } else {
-                        console.log('[RESULT] 宽高比一致:', resultRatio.toFixed(2));
+        if (resultDiv && fileUrl) {
+            // 释放旧的 background-image blob URL
+            var oldUrl = resultDiv.style.backgroundImage;
+            var blobMatch = oldUrl.match(/url\("(blob:[^"]+)"\)/);
+            if (blobMatch) URL.revokeObjectURL(blobMatch[1]);
+            
+            // 等待图片加载完成后再设置 background-image
+            var tmpImg = new Image();
+            tmpImg.onload = function() {
+                var rw = tmpImg.naturalWidth, rh = tmpImg.naturalHeight;
+                // 检查宽高比是否一致
+                if (origDiv) {
+                    var origBg = origDiv.style.backgroundImage;
+                    var origMatch = origBg.match(/url\("(blob:[^"]+)"\)/);
+                    if (origMatch) {
+                        var origImg = new Image();
+                        origImg.onload = function() {
+                            var origRatio = origImg.naturalWidth / origImg.naturalHeight;
+                            var resultRatio = rw / rh;
+                            if (Math.abs(origRatio - resultRatio) > 0.01) {
+                                console.warn('[WARN] 宽高比不一致！原图:', origRatio.toFixed(2), '结果:', resultRatio.toFixed(2));
+                            } else {
+                                console.log('[RESULT] 宽高比一致:', resultRatio.toFixed(2), '→ 两张图必然对齐');
+                            }
+                        };
+                        origImg.src = origMatch[1];
                     }
                 }
-                
-                // 打印调试信息
-                var containerRect = container ? container.getBoundingClientRect() : null;
-                var origRect = origImage ? origImage.getBoundingClientRect() : null;
-                var resultRect = this.getBoundingClientRect();
-                console.log('===== 图片重叠检查 =====');
-                console.log('[CONTAINER]', cw + 'x' + ch);
-                console.log('[ORIG IMG]', origRect ? origRect.width + 'x' + origRect.height : 'N/A', '@', origRect ? Math.round(origRect.left - (containerRect ? containerRect.left : 0)) + ',' + Math.round(origRect.top - (containerRect ? containerRect.top : 0)) : 'N/A');
-                console.log('[RESULT IMG]', resultRect.width + 'x' + resultRect.height, '@', Math.round(resultRect.left - (containerRect ? containerRect.left : 0)) + ',' + Math.round(resultRect.top - (containerRect ? containerRect.top : 0)));
-                if (origRect && resultRect) {
-                    var posDiff = Math.abs(origRect.left - resultRect.left) + Math.abs(origRect.top - resultRect.top);
-                    var sizeDiff = Math.abs(origRect.width - resultRect.width) + Math.abs(origRect.height - resultRect.height);
-                    console.log('[OVERLAP] 偏差: pos=' + posDiff + 'px size=' + sizeDiff + 'px', posDiff <= 1 && sizeDiff <= 1 ? '✅ 对齐' : '❌ 未对齐');
-                }
-                console.log('===== 检查结束 =====');
-                sendBackendLog('info', '[RESULT] 结果图:' + rw + 'x' + rh + ' 容器:' + cw + 'x' + ch, 'completion');
+                // 把结果图转为 blob URL 再设为 background-image
+                fetch(fileUrl).then(r => r.blob()).then(blob => {
+                    var blobUrl = URL.createObjectURL(blob);
+                    resultDiv.style.backgroundImage = 'url("' + blobUrl + '")';
+                    var placeholder = document.getElementById('imageComparePlaceholder');
+                    if (placeholder) placeholder.style.display = 'none';
+                    initCompareSlider('image');
+                    console.log('[RESULT] 结果图已设为 background-image:', rw, 'x', rh);
+                }).catch(e => console.error('结果图加载失败:', e));
             };
-            resultImage.onerror = function() {
+            tmpImg.onerror = function() {
                 console.error('Failed to load result image:', fileUrl);
-                sendBackendLog('error', '结果图片加载失败: ' + fileUrl, 'completion');
             };
-            resultImage.src = fileUrl;
+            tmpImg.src = fileUrl;
         }
+
     }
     
     AppState.completedTaskId = task.id;

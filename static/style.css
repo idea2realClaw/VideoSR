@@ -1779,33 +1779,19 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    /* 两个 div 完全一样大，完全重叠 */
+    /* 两张图用完全相同的 background 渲染，100% 对齐 */
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
     box-sizing: border-box;
 }
 
-/* 调试边框：红色=原图层，绿色=结果图层 */
+/* z-index 分层：原图在上，结果图在下 */
 .compare-original {
-    outline: 2px dashed red;
     z-index: 2;
 }
 .compare-result {
-    outline: 2px dashed green;
     z-index: 1;
-}
-
-/*
- * 两张图片都用 object-fit: contain
- * 浏览器会自动计算并居中，两张图用相同规则，必然对齐
- */
-.compare-original img,
-.compare-original video,
-.compare-result img,
-.compare-result video {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;   /* 完整显示，自动缩放 */
-    object-position: center; /* 强制居中（默认值，显式写出）*/
-    display: block;
 }
 
 /* 激活对比模式后，原图层按滑块位置裁剪（右側透明） */
