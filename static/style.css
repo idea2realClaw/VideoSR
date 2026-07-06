@@ -1913,14 +1913,14 @@ body {
     margin-top: 20px;
 }
 
-/* 图片对比容器：宽度 800px，高度自适应图片宽高比 */
+/* 图片对比容器：宽度 720px，高度按图片宽高比自适应 */
 #imagePreviewSection .compare-container {
-    width: 800px;
+    width: 720px;
     height: auto;
     min-height: 200px;
-    max-height: 800px;
+    max-height: 720px;
     margin: 0 auto;
-    /* aspect-ratio 由 JS 动态设置，匹配图片宽高比 */
+    /* aspect-ratio 由 JS 动态设置，精确匹配图片宽高比，确保两张图完全重叠 */
 }
 
 /* 视频预览区保留外框 */
