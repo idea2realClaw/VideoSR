@@ -823,20 +823,6 @@ function resetToUpload() {
     if (origInfo) origInfo.innerHTML = '';
     var resultInfo = document.getElementById('resultImageInfo');
     if (resultInfo) resultInfo.innerHTML = '';
-    // 清理 testView
-    var testPanel = document.getElementById('imageTestPanel');
-    if (testPanel) testPanel.style.display = 'none';
-    var testImg = document.getElementById('imageTestImg');
-    if (testImg) {
-        var oldUrl3 = testImg.style.backgroundImage;
-        var blobMatch3 = oldUrl3.match(/url\("?(blob:[^"]+)"?\)/);
-        if (blobMatch3) URL.revokeObjectURL(blobMatch3[1]);
-        testImg.style.backgroundImage = '';
-    }
-    var testView = document.getElementById('imageTestView');
-    if (testView) testView.style.height = '';
-    var testInfo = document.getElementById('imageTestInfo');
-    if (testInfo) testInfo.innerHTML = '';
 }
 
 // ==========================================
@@ -1210,27 +1196,6 @@ function showCompletion(task) {
                     
                     // 设置结果图的 background-image（对比滑块区）
                     resultDiv.style.backgroundImage = 'url("' + blobUrl + '")';
-                    
-                    // ===== 同时显示到右侧 testView（512px 宽，强制拉伸填满）=====
-                    var testPanel = document.getElementById('imageTestPanel');
-                    var testView = document.getElementById('imageTestView');
-                    var testImg = document.getElementById('imageTestImg');
-                    var testInfo = document.getElementById('imageTestInfo');
-                    if (testPanel && testView && testImg) {
-                        // 显示 testPanel
-                        testPanel.style.display = 'flex';
-                        // 按结果图宽高比设置 testView 高度（宽度固定 512px）
-                        var testH = Math.round(512 * rh / rw);
-                        testView.style.height = testH + 'px';
-                        // 设置 testImg 的 background-image（用同一个 blob URL）
-                        testImg.style.backgroundImage = 'url("' + blobUrl + '")';
-                        console.log('[TEST] testView 高度设为:', testH, '(结果图:', rw, 'x', rh, ')');
-                        // 显示 testView 信息
-                        if (testInfo) {
-                            testInfo.innerHTML = '<div>尺寸: ' + rw + ' × ' + rh + '</div><div>testView: 512 × ' + testH + '（强制拉伸）</div>';
-                        }
-                    }
-                    // ===== end testView =====
                     
                     // 显示结果图片信息
                     var resultInfo = document.getElementById('resultImageInfo');
