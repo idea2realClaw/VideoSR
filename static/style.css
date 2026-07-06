@@ -1782,7 +1782,9 @@ body {
     /* 两张图用完全相同的 background 渲染，100% 对齐 */
     background-repeat: no-repeat;
     background-position: center;
-    background-size: contain;
+    /* contain: 完整显示（可能留白）；如宽高比一致则填满 */
+    /* 强制 100% 100% 确保两张图都严格拉伸到和容器一样大 */
+    background-size: 100% 100%;
     box-sizing: border-box;
 }
 

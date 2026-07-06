@@ -1193,15 +1193,25 @@ function showCompletion(task) {
                         origImg.src = origMatch[1];
                     }
                 }
-                // 把结果图转为 blob URL 再设为 background-image
-                fetch(fileUrl).then(r => r.blob()).then(blob => {
-                    var blobUrl = URL.createObjectURL(blob);
-                    resultDiv.style.backgroundImage = 'url("' + blobUrl + '")';
-                    var placeholder = document.getElementById('imageComparePlaceholder');
-                    if (placeholder) placeholder.style.display = 'none';
+                // 结果图直接用 fileUrl 设 background-image（两张图用完全相同的渲染路径）
+                // 先打印诊断信息
+                console.log('[RESULT] 设置结果图 background-image, URL:', fileUrl, '| 尺寸:', rw, 'x', rh);
+                resultDiv.style.backgroundImage = 'url("' + fileUrl + '")';
+                // 强制让浏览器立即重新计算布局
+                resultDiv.offsetHeight;
+                var placeholder = document.getElementById('imageComparePlaceholder');
+                if (placeholder) placeholder.style.display = 'none';
+                // 延迟一帧再初始化滑块，确保 background-image 已开始加载
+                requestAnimationFrame(function() {
+                    // 诊断：打印容器和结果图的实际尺寸
+                    var crect = container.getBoundingClientRect();
+                    var rrect = resultDiv.getBoundingClientRect();
+                    console.log('[RESULT] container rect:', crect.width, 'x', crect.height);
+                    console.log('[RESULT] resultDiv rect:', rrect.width, 'x', rrect.height);
+                    console.log('[RESULT] resultDiv background-size:', getComputedStyle(resultDiv).backgroundSize);
                     initCompareSlider('image');
-                    console.log('[RESULT] 结果图已设为 background-image:', rw, 'x', rh);
-                }).catch(e => console.error('结果图加载失败:', e));
+                    console.log('[RESULT] initCompareSlider 完成');
+                });
             };
             tmpImg.onerror = function() {
                 console.error('Failed to load result image:', fileUrl);
