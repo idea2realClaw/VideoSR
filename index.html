@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VideoSR - AI视频/图片超分辨率增强工具</title>
-    <link rel="stylesheet" href="static/style.css?v=2026070702">
+    <link rel="stylesheet" href="static/style.css?v=2026070601">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
 </head>
 <body>
@@ -146,7 +146,7 @@
                             </div>
                         </div>
 
-                        <!-- 图片预览区域 -->
+                        <!-- 图片预览区域（Upscayl 风格：重叠对比滑块） -->
                         <div class="preview-section" id="imagePreviewSection" style="display: none;">
                             <div class="preview-header">
                                 <h3 class="preview-title">图片预览</h3>
@@ -156,23 +156,29 @@
                                     </svg>
                                 </button>
                             </div>
-                            <!-- 原图和结果图并列显示，各720px宽，间距100px -->
-                            <div class="preview-container image-preview-container" id="imagePreviewContainer">
-                                <!-- 原图 -->
-                                <div class="image-panel" id="originalPanel">
-                                    <div class="image-panel-header">原始</div>
-                                    <div class="image-panel-view" id="originalImageView">
-                                        <div class="compare-original" id="originalImageBg"></div>
+                            <!-- Upscayl 风格：原图和结果图重叠，滑块拖动对比 -->
+                            <div class="image-compare-wrapper" id="imageCompareWrapper">
+                                <div class="image-compare-container" id="imageCompareContainer">
+                                    <!-- 结果图（底层，全程显示） -->
+                                    <div class="image-compare-result" id="imageCompareResult"></div>
+                                    <!-- 原图（上层，滑块左侧显示） -->
+                                    <div class="image-compare-original" id="imageCompareOriginal">
+                                        <div class="image-compare-original-bg" id="originalImageBg"></div>
                                     </div>
-                                    <div class="image-panel-info" id="originalImageInfo"></div>
+                                    <!-- 拖动滑块 -->
+                                    <div class="image-compare-slider" id="imageCompareSlider">
+                                        <div class="image-compare-slider-line"></div>
+                                        <div class="image-compare-slider-handle">⟷</div>
+                                        <div class="image-compare-slider-line"></div>
+                                    </div>
+                                    <!-- 标签 -->
+                                    <div class="image-compare-label image-compare-label-left">原始</div>
+                                    <div class="image-compare-label image-compare-label-right">增强后</div>
                                 </div>
-                                <!-- 结果图（处理完成后显示） -->
-                                <div class="image-panel" id="resultPanel" style="display:none;">
-                                    <div class="image-panel-header">增强后</div>
-                                    <div class="image-panel-view" id="resultImageView">
-                                        <img id="resultImageImg" alt="增强后图片" style="width:100%; height:100%; object-fit:contain; object-position:center;">
-                                    </div>
-                                    <div class="image-panel-info" id="resultImageInfo"></div>
+                                <!-- 图片信息 -->
+                                <div class="image-compare-info">
+                                    <div class="image-info-text" id="originalImageInfo"></div>
+                                    <div class="image-info-text" id="resultImageInfo"></div>
                                 </div>
                             </div>
                         </div>
@@ -430,6 +436,6 @@
         <p class="loading-text" id="loadingText">加载中...</p>
     </div>
 
-    <script src="static/app.js?v=2026070702"></script>
+    <script src="static/app.js?v=2026070601"></script>
 </body>
 </html>

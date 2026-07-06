@@ -644,7 +644,7 @@ function showPreview(file, uploadResult) {
             origInfo.innerHTML = '<div>文件名: ' + file.name + '</div><div>文件大小: ' + fileSize + '</div>';
         }
     } else {
-        // 显示图片预览（对比模式）
+        // 显示图片预览（Upscayl 风格对比滑块）
         if (Elements.imagePreviewSection) {
             Elements.imagePreviewSection.style.display = 'block';
         }
@@ -652,47 +652,49 @@ function showPreview(file, uploadResult) {
             Elements.videoPreviewSection.style.display = 'none';
         }
         
-        // 设置原始图片预览（用 background-image）
-        var origDiv = document.getElementById('originalImageBg');
-        if (origDiv) {
+        // 设置原始图片（用 background-image，结果图也用同样方式保证对齐）
+        var origBg = document.getElementById('originalImageBg');
+        if (origBg) {
             var objectUrl = URL.createObjectURL(file);
             // 释放旧的 background-image URL
-            var oldUrl = origDiv.style.backgroundImage;
+            var oldUrl = origBg.style.backgroundImage;
             if (oldUrl && oldUrl.indexOf('blob:') >= 0) {
                 var match = oldUrl.match(/url\("?(blob:[^"]+)"?\)/);
                 if (match) URL.revokeObjectURL(match[1]);
             }
-            origDiv.style.backgroundImage = 'url("' + objectUrl + '")';
-            console.log('Original image set as background:', objectUrl);
+            origBg.style.backgroundImage = 'url("' + objectUrl + '")';
+            console.log('[ORIG] 原图 background-image 已设置:', objectUrl);
         }
         
-        // 显示原图面板，隐藏结果面板
-        var originalPanel = document.getElementById('originalPanel');
-        if (originalPanel) originalPanel.style.display = 'flex';
-        var resultPanel = document.getElementById('resultPanel');
-        if (resultPanel) resultPanel.style.display = 'none';
         // 清空结果图 background-image
         var resultDiv = document.getElementById('imageCompareResult');
         if (resultDiv) resultDiv.style.backgroundImage = '';
         
-        // 显示图片信息，并根据图片尺寸设置 originalImageView 的高度
+        // 根据图片宽高比设置对比容器的高度（宽度固定 720px）
+        var container = document.getElementById('imageCompareContainer');
         var fileSize = formatFileSize(file.size);
         var img = new Image();
         img.onload = function() {
+            // 显示原图信息
             var origInfo = document.getElementById('originalImageInfo');
             if (origInfo) {
                 origInfo.innerHTML = '<div>文件名: ' + file.name + '</div><div>文件大小: ' + fileSize + '</div><div>尺寸: ' + img.width + ' × ' + img.height + ' 像素</div>';
             }
-            // 根据图片宽高比设置 originalImageView 的高度（宽度固定 720px）
-            var originalImageView = document.getElementById('originalImageView');
-            if (originalImageView && img.width > 0) {
+            // 设置容器高度（按图片宽高比）
+            if (container && img.width > 0) {
                 var viewH = Math.round(720 * img.height / img.width);
-                originalImageView.style.height = viewH + 'px';
-                console.log('[ORIG] originalImageView height set to:', viewH, '(img:', img.width, 'x', img.height, ')');
+                container.style.height = viewH + 'px';
+                console.log('[ORIG] 对比容器高度设为:', viewH, '(原图:', img.width, 'x', img.height, ')');
             }
             sendBackendLog('info', '[ORIG] 原图:' + img.width + 'x' + img.height, 'preview');
         };
         img.src = URL.createObjectURL(file);
+        
+        // 初始化滑块位置（50%，左侧原图，右侧留白等结果）
+        var originalDiv = document.getElementById('imageCompareOriginal');
+        if (originalDiv) {
+            originalDiv.style.clipPath = 'inset(0 50% 0 0)';
+        }
     }
     
     // 显示设置面板
@@ -796,32 +798,31 @@ function resetToUpload() {
         Elements.imageResultPlaceholder.style.display = 'flex';
     }
     
-    // 清理原图和结果图的 background-image（新面板结构）
-    var origDiv = document.getElementById('originalImageBg');
-    if (origDiv) {
-        var oldUrl = origDiv.style.backgroundImage;
+    // 清理原图和结果图的 background-image（Upscayl 风格对比视图）
+    var origBg = document.getElementById('originalImageBg');
+    if (origBg) {
+        var oldUrl = origBg.style.backgroundImage;
         var blobMatch = oldUrl.match(/url\("?(blob:[^"]+)"?\)/);
         if (blobMatch) URL.revokeObjectURL(blobMatch[1]);
-        origDiv.style.backgroundImage = '';
+        origBg.style.backgroundImage = '';
     }
-    // 清理结果图 <img> 的 blob URL
-    var resultImg = document.getElementById('resultImageImg');
-    if (resultImg) {
-        if (resultImg._blobUrl) {
-            URL.revokeObjectURL(resultImg._blobUrl);
-            resultImg._blobUrl = null;
-        }
-        resultImg.src = '';
+    var resultDiv = document.getElementById('imageCompareResult');
+    if (resultDiv) {
+        var oldUrl2 = resultDiv.style.backgroundImage;
+        var blobMatch2 = oldUrl2.match(/url\("?(blob:[^"]+)"?\)/);
+        if (blobMatch2) URL.revokeObjectURL(blobMatch2[1]);
+        resultDiv.style.backgroundImage = '';
     }
-    // 重置面板 view 高度和显示状态
-    var originalPanel = document.getElementById('originalPanel');
-    if (originalPanel) originalPanel.style.display = 'none';
-    var resultPanel = document.getElementById('resultPanel');
-    if (resultPanel) resultPanel.style.display = 'none';
-    var originalImageView = document.getElementById('originalImageView');
-    if (originalImageView) originalImageView.style.height = '';
-    var resultImageView = document.getElementById('resultImageView');
-    if (resultImageView) resultImageView.style.height = '';
+    // 重置滑块和 clip-path
+    var originalDiv = document.getElementById('imageCompareOriginal');
+    if (originalDiv) originalDiv.style.clipPath = 'inset(0 50% 0 0)';
+    var container = document.getElementById('imageCompareContainer');
+    if (container) container.style.height = '';
+    // 重置图片信息
+    var origInfo = document.getElementById('originalImageInfo');
+    if (origInfo) origInfo.innerHTML = '';
+    var resultInfo = document.getElementById('resultImageInfo');
+    if (resultInfo) resultInfo.innerHTML = '';
 }
 
 // ==========================================
@@ -1167,64 +1168,58 @@ function showCompletion(task) {
             resultVideo.src = fileUrl;
         }
     } else {
-        // 显示结果图片（在独立的 resultPanel 中，720px 宽，位于原图右侧 100px）
-        var resultPanel = document.getElementById('resultPanel');
-        if (resultPanel) resultPanel.style.display = 'flex';
+        // 显示结果图片（Upscayl 风格：重叠对比滑块）
+        var resultDiv = document.getElementById('imageCompareResult');
+        var container = document.getElementById('imageCompareContainer');
         
-        var resultImg = document.getElementById('resultImageImg');
-        var resultImageView = document.getElementById('resultImageView');
-        
-        if (resultImg && fileUrl) {
-            // 释放旧的 blob URL
-            if (resultImg._blobUrl) {
-                URL.revokeObjectURL(resultImg._blobUrl);
-                resultImg._blobUrl = null;
-            }
+        if (resultDiv && fileUrl) {
+            // 释放旧的 background-image blob URL
+            var oldUrl = resultDiv.style.backgroundImage;
+            var blobMatch = oldUrl.match(/url\("(blob:[^"]+)"\)/);
+            if (blobMatch) URL.revokeObjectURL(blobMatch[1]);
             
-            console.log('[RESULT] 开始加载结果图:', fileUrl);
+            console.log('[RESULT] 开始下载结果图:', fileUrl);
             
-            // 用 fetch 下载结果图，转成 blob URL 再设 img.src
-            // 这样确保图片完全加载后再显示，且 <img> 的 object-fit:contain 能正确工作
+            // 用 fetch 下载结果图，转成 blob URL 再设置 background-image
+            // 和原图用完全相同的渲染方式（background-image），保证对齐
             fetch(fileUrl).then(function(r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.blob();
             }).then(function(blob) {
                 var blobUrl = URL.createObjectURL(blob);
-                resultImg._blobUrl = blobUrl;
                 
-                // 等待图片加载完成后再设置 view 高度
-                resultImg.onload = function() {
-                    var rw = resultImg.naturalWidth, rh = resultImg.naturalHeight;
+                // 先加载图片获取尺寸，再设置 background-image
+                var tmpImg = new Image();
+                tmpImg.onload = function() {
+                    var rw = tmpImg.naturalWidth, rh = tmpImg.naturalHeight;
                     console.log('[RESULT] 结果图尺寸:', rw, 'x', rh);
                     
-                    // 根据结果图宽高比设置 resultImageView 的高度（宽度固定 720px）
-                    if (resultImageView && rw > 0) {
-                        var viewH = Math.round(720 * rh / rw);
-                        resultImageView.style.height = viewH + 'px';
-                        console.log('[RESULT] resultImageView height set to:', viewH, '(img:', rw, 'x', rh, ')');
-                    }
+                    // 设置结果图的 background-image
+                    resultDiv.style.backgroundImage = 'url("' + blobUrl + '")';
                     
                     // 显示结果图片信息
                     var resultInfo = document.getElementById('resultImageInfo');
                     if (resultInfo) {
-                        resultInfo.innerHTML = '<div>尺寸: ' + rw + ' × ' + rh + ' 像素</div>';
+                        resultInfo.innerHTML = '<div>输出分辨率: ' + (task.outputResolution || rw + ' × ' + rh) + '</div><div>处理时间: ' + formatDuration(task.processingTime || 0) + '</div>';
                     }
                     
-                    console.log('[RESULT] 结果图显示完成');
+                    // 初始化对比滑块（50% 位置）
+                    initImageCompareSlider();
+                    
+                    console.log('[RESULT] 结果图显示完成，滑块已初始化');
                 };
-                resultImg.onerror = function() {
+                tmpImg.onerror = function() {
                     console.error('[RESULT] 结果图加载失败（blob URL）');
-                    // 回退：直接用 fileUrl
-                    resultImg.src = fileUrl;
+                    resultDiv.style.backgroundImage = 'url("' + fileUrl + '")';
+                    initImageCompareSlider();
                 };
-                resultImg.src = blobUrl;
+                tmpImg.src = blobUrl;
             }).catch(function(e) {
                 console.error('[RESULT] 结果图下载失败:', e);
-                // 回退：直接用 fileUrl
-                resultImg.src = fileUrl;
+                resultDiv.style.backgroundImage = 'url("' + fileUrl + '")';
+                initImageCompareSlider();
             });
         }
-
     }
     
     AppState.completedTaskId = task.id;
@@ -1533,4 +1528,88 @@ function initCompareSlider(type) {
 
     console.log('Compare slider initialized for:', type);
     sendBackendLog('info', 'Compare slider initialized: ' + type, 'compare');
+}
+
+// ==========================================
+// Upscayl 风格图片对比滑块（重叠对比）
+// ==========================================
+var imageCompareInitialized = false;
+
+function initImageCompareSlider() {
+    var container = document.getElementById('imageCompareContainer');
+    var slider = document.getElementById('imageCompareSlider');
+    var originalDiv = document.getElementById('imageCompareOriginal');
+    
+    if (!container || !slider || !originalDiv) {
+        console.warn('[COMPARE] 初始化失败：元素未找到');
+        return;
+    }
+    
+    // 设置滑块到中间
+    function setSliderToCenter() {
+        var rect = container.getBoundingClientRect();
+        var w = rect.width;
+        if (w === 0) {
+            requestAnimationFrame(setSliderToCenter);
+            return;
+        }
+        var centerX = w / 2;
+        slider.style.left = centerX + 'px';
+        // clip-path：只显示左侧 50%
+        originalDiv.style.clipPath = 'inset(0 ' + (w - centerX) + 'px 0 0)';
+        console.log('[COMPARE] 滑块初始化完成，容器宽度:', w);
+    }
+    
+    requestAnimationFrame(setSliderToCenter);
+    
+    // 如果已经初始化过，不再重复绑定
+    if (imageCompareInitialized) return;
+    imageCompareInitialized = true;
+    
+    var isDragging = false;
+    
+    function onDragStart(e) {
+        isDragging = true;
+        e.preventDefault();
+        slider.style.cursor = 'grabbing';
+    }
+    
+    function onDragMove(e) {
+        if (!isDragging) return;
+        var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        var rect = container.getBoundingClientRect();
+        var x = clientX - rect.left;
+        // 限制滑块范围（20px ~ 容器宽度-20px）
+        x = Math.max(20, Math.min(x, rect.width - 20));
+        
+        slider.style.left = x + 'px';
+        // 更新 clip-path：左侧显示原图，右侧显示结果图
+        originalDiv.style.clipPath = 'inset(0 ' + (rect.width - x) + 'px 0 0)';
+    }
+    
+    function onDragEnd() {
+        isDragging = false;
+        slider.style.cursor = 'grab';
+    }
+    
+    // 鼠标事件（绑定在 slider 上）
+    slider.addEventListener('mousedown', onDragStart);
+    document.addEventListener('mousemove', onDragMove);
+    document.addEventListener('mouseup', onDragEnd);
+    
+    // 触摸事件
+    slider.addEventListener('touchstart', onDragStart, { passive: false });
+    document.addEventListener('touchmove', onDragMove, { passive: false });
+    document.addEventListener('touchend', onDragEnd);
+    
+    // 点击容器也可以移动滑块
+    container.addEventListener('click', function(e) {
+        var rect = container.getBoundingClientRect();
+        var x = e.clientX - rect.left;
+        x = Math.max(20, Math.min(x, rect.width - 20));
+        slider.style.left = x + 'px';
+        originalDiv.style.clipPath = 'inset(0 ' + (rect.width - x) + 'px 0 0)';
+    });
+    
+    console.log('[COMPARE] Upscayl 风格对比滑块已初始化');
 }
