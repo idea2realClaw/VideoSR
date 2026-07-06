@@ -2057,6 +2057,17 @@ body {
     border: 1px solid var(--border-color);
 }
 
+/* 尺寸过大提示（超过 1024x1024） */
+.image-too-large-warn {
+    margin-top: 4px;
+    padding: 4px 8px;
+    color: #e67e22;
+    font-weight: 600;
+    background: rgba(230, 126, 34, 0.12);
+    border: 1px solid rgba(230, 126, 34, 0.4);
+    border-radius: var(--radius-sm);
+}
+
 /* ==========================================
    图片预览区：对比滑块
    ========================================== */

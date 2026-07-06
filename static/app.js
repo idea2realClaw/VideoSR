@@ -665,10 +665,21 @@ function showPreview(file, uploadResult) {
             origBg.style.backgroundImage = 'url("' + objectUrl + '")';
             console.log('[ORIG] 原图 background-image 已设置:', objectUrl);
         }
-        
-        // 清空结果图 background-image
+
+        // 超分前：结果图底层（原图下面的 View）也先临时放原图，
+        // 让对比区在超分前整片都显示原图；超分完成后会被增强图替换。
+        // 注意：必须用独立的 blob URL，不能与 origBg 共用，否则
+        // showCompletion 里 revoke 旧结果 URL 时会误删原图 URL。
         var resultDiv = document.getElementById('imageCompareResult');
-        if (resultDiv) resultDiv.style.backgroundImage = '';
+        if (resultDiv) {
+            // 释放上一次残留的结果图临时 URL
+            var oldR = resultDiv.style.backgroundImage;
+            var rMatch = oldR.match(/url\("?(blob:[^"]+)"?\)/);
+            if (rMatch) URL.revokeObjectURL(rMatch[1]);
+            var resultTempUrl = URL.createObjectURL(file);
+            resultDiv.style.backgroundImage = 'url("' + resultTempUrl + '")';
+            console.log('[ORIG] 结果图底层临时放原图:', resultTempUrl);
+        }
         
         // 根据图片宽高比设置对比容器的高度（宽度固定 720px）
         var container = document.getElementById('imageCompareContainer');
@@ -677,9 +688,15 @@ function showPreview(file, uploadResult) {
         img.onload = function() {
             // 显示原图信息
             var origInfo = document.getElementById('originalImageInfo');
-            if (origInfo) {
-                origInfo.innerHTML = '<div>文件名: ' + file.name + '</div><div>文件大小: ' + fileSize + '</div><div>尺寸: ' + img.width + ' × ' + img.height + ' 像素</div>';
+            var infoHtml = '<div>文件名: ' + file.name + '</div>'
+                + '<div>文件大小: ' + fileSize + '</div>'
+                + '<div>尺寸: ' + img.width + ' × ' + img.height + ' 像素</div>';
+            // 超过 1024x1024 提示：图像已足够清晰，可能不需要超分
+            var tooLarge = (img.width > 1024 || img.height > 1024);
+            if (tooLarge) {
+                infoHtml += '<div class="image-too-large-warn">⚠️ 尺寸超过 1024×1024，已足够清晰，可能不需要超分</div>';
             }
+            if (origInfo) origInfo.innerHTML = infoHtml;
             // 设置容器高度（按图片宽高比）
             if (container && img.width > 0) {
                 var viewH = Math.round(720 * img.height / img.width);
@@ -687,6 +704,9 @@ function showPreview(file, uploadResult) {
                 console.log('[ORIG] 对比容器高度设为:', viewH, '(原图:', img.width, 'x', img.height, ')');
             }
             sendBackendLog('info', '[ORIG] 原图:' + img.width + 'x' + img.height, 'preview');
+            if (tooLarge) {
+                showToast('warning', '图像尺寸 ' + img.width + ' × ' + img.height + ' 已超过 1024×1024，已足够清晰，可能不需要超分处理');
+            }
         };
         img.src = URL.createObjectURL(file);
         
