@@ -189,7 +189,9 @@ const AppState = {
         useNpu: true
     },
     isProcessing: false,
-    progressInterval: null
+    progressInterval: null,
+    originalImageWidth: 0,
+    originalImageHeight: 0
 };
 
 // API基础URL - 使用相对路径，自动适配当前域名和端口
@@ -691,7 +693,10 @@ function showPreview(file, uploadResult) {
             var infoHtml = '<div>文件名: ' + file.name + '</div>'
                 + '<div>文件大小: ' + fileSize + '</div>'
                 + '<div>尺寸: ' + img.width + ' × ' + img.height + ' 像素</div>';
-            // 超过 1024x1024 提示：两条边都超过 1024 才算尺寸足够大
+            // 记录原图尺寸（供「开始超分」时判断是否跳过）
+            AppState.originalImageWidth = img.width;
+            AppState.originalImageHeight = img.height;
+            // 信息区提示：两条边都超过 1024 才算尺寸足够大（仅提示，不直接拦截）
             var tooLarge = (img.width > 1024 && img.height > 1024);
             if (tooLarge) {
                 infoHtml += '<div class="image-too-large-warn">⚠️ 宽高均超过 1024，已足够清晰，可能不需要超分</div>';
@@ -704,9 +709,7 @@ function showPreview(file, uploadResult) {
                 console.log('[ORIG] 对比容器高度设为:', viewH, '(原图:', img.width, 'x', img.height, ')');
             }
             sendBackendLog('info', '[ORIG] 原图:' + img.width + 'x' + img.height, 'preview');
-            if (tooLarge) {
-                showToast('warning', '图像尺寸 ' + img.width + ' × ' + img.height + ' 宽高均超过 1024×1024，已足够清晰，可能不需要超分处理');
-            }
+            // toast 提示改为在点击「开始超分」时触发（见 startProcessing），此处不再弹
         };
         img.src = URL.createObjectURL(file);
         
@@ -761,6 +764,8 @@ function resetToUpload() {
     AppState.currentTaskId = null;
     AppState.uploadedFilePath = null;
     AppState.completedTaskId = null;
+    AppState.originalImageWidth = 0;
+    AppState.originalImageHeight = 0;
     
     // 显示上传区域
     if (Elements.uploadArea) {
@@ -1002,6 +1007,15 @@ async function startProcessing() {
     if (!AppState.uploadedFilePath) {
         Logger.error('未上传文件');
         showToast('error', '请先上传' + (AppState.mode === 'video' ? '视频' : '图片'));
+        return;
+    }
+    
+    // 图片模式：宽高均超过 1024×1024 时，提示已足够清晰，不执行超分
+    if (AppState.mode === 'image'
+        && AppState.originalImageWidth > 1024
+        && AppState.originalImageHeight > 1024) {
+        Logger.warn('原图宽高均超过 1024，跳过超分: ' + AppState.originalImageWidth + 'x' + AppState.originalImageHeight);
+        showToast('warning', '图像尺寸 ' + AppState.originalImageWidth + ' × ' + AppState.originalImageHeight + ' 宽高均超过 1024×1024，已足够清晰，可能不需要超分');
         return;
     }
     
