@@ -1926,6 +1926,63 @@ body {
 }
 
 /* ==========================================
+   原图/结果图并列显示（各720px宽，间距100px）
+   ========================================== */
+#imagePreviewContainer {
+    display: flex;
+    flex-direction: row;
+    gap: 100px;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+.image-panel {
+    width: 720px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.image-panel-header {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    padding: 6px 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    text-align: center;
+}
+
+.image-panel-view {
+    width: 720px;
+    position: relative;
+    overflow: hidden;
+    background: #000;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+/* 图片用 background-image 渲染，填满 panel-view */
+#originalImageBg,
+#imageCompareResult {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+}
+
+.image-panel-info {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+/* ==========================================
    移动端响应式
    ========================================== */
 @media (max-width: 768px) {

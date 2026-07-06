@@ -156,27 +156,23 @@
                                     </svg>
                                 </button>
                             </div>
-                            <div class="preview-container image-preview-container">
-                                <div class="compare-container" id="imageCompareContainer">
-                                    <div class="compare-original" id="originalImageBg">
-                                        <div class="compare-label compare-label-left">原始</div>
+                            <!-- 原图和结果图并列显示，各720px宽，间距100px -->
+                            <div class="preview-container image-preview-container" id="imagePreviewContainer">
+                                <!-- 原图 -->
+                                <div class="image-panel" id="originalPanel">
+                                    <div class="image-panel-header">原始</div>
+                                    <div class="image-panel-view" id="originalImageView">
+                                        <div class="compare-original" id="originalImageBg"></div>
                                     </div>
-                                    <div class="compare-result" id="imageCompareResult">
-                                        <div class="compare-label compare-label-right">增强后</div>
-                                    </div>
-                                    <div class="compare-slider" id="imageCompareSlider">
-                                        <div class="compare-slider-line"></div>
-                                        <div class="compare-slider-handle">⬌</div>
-                                        <div class="compare-slider-line"></div>
-                                    </div>
-                                    <div class="compare-placeholder" id="imageComparePlaceholder">
-                                        <div class="placeholder-icon">🖼️</div>
-                                        <p>处理完成后显示对比</p>
-                                    </div>
+                                    <div class="image-panel-info" id="originalImageInfo"></div>
                                 </div>
-                                <div class="compare-info">
-                                    <div class="video-info" id="originalImageInfo" style="display:inline-block;"></div>
-                                    <div class="video-info" id="resultImageInfo" style="display:inline-block; margin-left:12px;"></div>
+                                <!-- 结果图（处理完成后显示） -->
+                                <div class="image-panel" id="resultPanel" style="display:none;">
+                                    <div class="image-panel-header">增强后</div>
+                                    <div class="image-panel-view" id="resultImageView">
+                                        <div class="compare-result" id="imageCompareResult"></div>
+                                    </div>
+                                    <div class="image-panel-info" id="resultImageInfo"></div>
                                 </div>
                             </div>
                         </div>
