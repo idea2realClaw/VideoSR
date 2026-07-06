@@ -697,11 +697,12 @@ function showPreview(file, uploadResult) {
                 container.style.width = containerWidth + 'px';
                 container.style.height = containerHeight + 'px';
                 
-                // 用统一的精确计算函数让图片填满容器
-                fitImageToContainer(document.getElementById('originalImage'), img.width, img.height, containerWidth, containerHeight);
-                fitImageToContainer(document.getElementById('resultImage'), img.width, img.height, containerWidth, containerHeight);
-                
-                console.log('[ORIG IMAGE] 容器尺寸设为:', containerWidth, 'x', containerHeight, '(原图:', img.width, 'x', img.height, ')');
+                // 清除图片内联样式，让 CSS object-fit:contain 生效
+                var oi = document.getElementById('originalImage');
+                var ri = document.getElementById('resultImage');
+                if (oi) { oi.style.objectFit = ''; oi.style.width = ''; oi.style.height = ''; }
+                if (ri) { ri.style.objectFit = ''; ri.style.width = ''; ri.style.height = ''; }
+                console.log('[ORIG] 容器尺寸设为:', containerWidth, 'x', containerHeight, '(原图:', img.width, 'x', img.height, ')');
             }
             // 打印原图实际像素和容器大小
             var cw = container ? container.offsetWidth : 0, ch = container ? container.offsetHeight : 0;
@@ -1169,14 +1170,14 @@ function showCompletion(task) {
                 if (placeholder) placeholder.style.display = 'none';
                 initCompareSlider('image');
                 
-                // ===== 用精确计算对齐结果图（和原图用同一个公式）=====
+                // 清除结果图内联样式，让 CSS object-fit:contain 生效（和原图一致）
+                this.style.objectFit = '';
+                this.style.width = '';
+                this.style.height = '';
+                this.style.margin = '';
+                
                 var rw = this.naturalWidth, rh = this.naturalHeight;
                 var container = document.getElementById('imageCompareContainer');
-                var cw = container ? container.offsetWidth : 720;
-                var ch = container ? container.offsetHeight : 0;
-                
-                // 调用统一的精确对齐函数
-                fitImageToContainer(this, rw, rh, cw, ch);
                 
                 // 检查宽高比
                 var origImage = document.getElementById('originalImage');
@@ -1434,41 +1435,6 @@ console.log('VideoSR app.js loaded');
 // 图片精确对齐函数（替代 object-fit: contain）
 // 用 JS 精确计算每张图的显示尺寸和 margin
 // 确保原图和结果图使用完全相同的公式，像素级对齐
-// ==========================================
-/**
- * 将图片精确对齐到容器中（类似 object-fit: contain 但完全由 JS 控制）
- * @param {HTMLImageElement} img - 要设置的 <img> 元素
- * @param {number} naturalWidth - 图片原始像素宽度
- * @param {number} naturalHeight - 图片原始像素高度
- * @param {number} containerWidth - 容器宽度 (px)
- * @param {number} containerHeight - 容器高度 (px)
- */
-function fitImageToContainer(img, naturalWidth, naturalHeight, containerWidth, containerHeight) {
-    if (!img || naturalWidth <= 0 || naturalHeight <= 0 || containerWidth <= 0 || containerHeight <= 0) return;
-    
-    // 计算缩放比例：保持宽高比，完整显示在容器内
-    var scale = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
-    
-    // 计算实际显示尺寸
-    var displayWidth = Math.round(naturalWidth * scale);
-    var displayHeight = Math.round(naturalHeight * scale);
-    
-    // 计算居中偏移
-    var marginLeft = Math.round((containerWidth - displayWidth) / 2);
-    var marginTop = Math.round((containerHeight - displayHeight) / 2);
-    
-    // 直接设置所有样式（不依赖 object-fit）
-    img.style.width = displayWidth + 'px';
-    img.style.height = displayHeight + 'px';
-    img.style.marginLeft = marginLeft + 'px';
-    img.style.marginTop = marginTop + 'px';
-    img.style.objectFit = 'none'; // 禁用 object-fit，完全由 JS 控制
-    
-    console.log('[fitImage] 像素:' + naturalWidth + 'x' + naturalHeight +
-                ' → 显示:' + displayWidth + 'x' + displayHeight +
-                ' | margin:' + marginLeft + ',' + marginTop +
-                ' | scale:' + scale.toFixed(4));
-}
 
 // 对比滑动条功能
 // ==========================================

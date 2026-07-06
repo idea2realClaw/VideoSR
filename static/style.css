@@ -1779,7 +1779,8 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    overflow: hidden; /* 关键：超出容器的部分裁掉 */
+    /* 两个 div 完全一样大，完全重叠 */
+    box-sizing: border-box;
 }
 
 /* 调试边框：红色=原图层，绿色=结果图层 */
@@ -1793,16 +1794,18 @@ body {
 }
 
 /*
- * 图片不再使用 object-fit: contain！
- * 改由 JS 精确计算并直接设置 width/height/margin
- * 确保原图和结果图像素级对齐
+ * 两张图片都用 object-fit: contain
+ * 浏览器会自动计算并居中，两张图用相同规则，必然对齐
  */
 .compare-original img,
 .compare-original video,
 .compare-result img,
 .compare-result video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;   /* 完整显示，自动缩放 */
+    object-position: center; /* 强制居中（默认值，显式写出）*/
     display: block;
-    /* width/height/margin 由 JS 动态设置，不在此处固定 */
 }
 
 /* 激活对比模式后，原图层按滑块位置裁剪（右側透明） */
