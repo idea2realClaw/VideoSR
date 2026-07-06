@@ -1209,15 +1209,16 @@ function showCompletion(task) {
         if (resultPanel) resultPanel.style.display = 'block';
 
         var resultVideo = document.getElementById('resultVideo');
+        var rvInfo = document.getElementById('resultVideoInfo');
+        // 立即显示文件名与分辨率，不依赖 onloadeddata
+        if (rvInfo) {
+            rvInfo.innerHTML = '<div>文件: ' + fileName + '</div><div>分辨率: ' + (task.outputResolution || '未知') + '</div>';
+        }
         if (resultVideo) {
             resultVideo.onloadeddata = function() {
-                // 元数据加载后更新信息
                 var dur = resultVideo.duration || 0;
-                var rvInfo = document.getElementById('resultVideoInfo');
-                if (rvInfo && (task.outputResolution || dur)) {
-                    var txt = '<div>输出分辨率: ' + (task.outputResolution || '未知') + '</div>';
-                    if (dur > 0) txt += '<div>时长: ' + Math.floor(dur) + ' 秒</div>';
-                    rvInfo.innerHTML = txt;
+                if (rvInfo && dur > 0) {
+                    rvInfo.innerHTML += '<div>时长: ' + Math.floor(dur) + ' 秒</div>';
                 }
             };
             resultVideo.src = fileUrl;
