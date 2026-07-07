@@ -33,6 +33,9 @@ nul
 outputs/*
 !outputs/.gitkeep
 
+# 上传文件（运行时产物）
+uploads/*
+
 # OS
 Thumbs.db
 Desktop.ini
