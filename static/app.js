@@ -861,46 +861,58 @@ function resetToUpload() {
 // ==========================================
 function initSettings() {
     console.log('Initializing settings...');
-    
-    // 放大倍数选择
+
+    // 1. 从本地文件(localStorage)读取上次保存的设置，覆盖默认值
+    loadSettings();
+
+    // 2. 放大倍数选择：先恢复已保存的 active 状态，再绑定事件
     document.querySelectorAll('.scale-btn').forEach(function(btn) {
+        if (parseInt(btn.dataset.scale) === AppState.settings.scale) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
         btn.addEventListener('click', function() {
             document.querySelectorAll('.scale-btn').forEach(function(b) {
                 b.classList.remove('active');
             });
             btn.classList.add('active');
             AppState.settings.scale = parseInt(btn.dataset.scale);
+            saveSettings();
         });
     });
-    
-    // 原图最大尺寸输入
+
+    // 3. 原图最大尺寸输入：恢复值 + 绑定
     if (Elements.maxWidthInput) {
+        Elements.maxWidthInput.value = AppState.settings.maxWidth;
         Elements.maxWidthInput.addEventListener('input', function() {
             var val = parseInt(Elements.maxWidthInput.value) || 0;
             AppState.settings.maxWidth = val;
+            saveSettings();
         });
     }
     if (Elements.maxHeightInput) {
+        Elements.maxHeightInput.value = AppState.settings.maxHeight;
         Elements.maxHeightInput.addEventListener('input', function() {
             var val = parseInt(Elements.maxHeightInput.value) || 0;
             AppState.settings.maxHeight = val;
+            saveSettings();
         });
     }
-    
-    // 设置面板折叠（默认折叠）
+
+    // 4. 设置面板折叠（默认折叠）
     if (Elements.settingsToggle) {
         // 默认折叠设置面板
         Elements.settingsContent.style.display = 'none';
         Elements.settingsToggle.classList.add('collapsed');
-        
         Elements.settingsToggle.addEventListener('click', function() {
             const isCollapsed = Elements.settingsContent.style.display === 'none';
             Elements.settingsContent.style.display = isCollapsed ? 'block' : 'none';
             Elements.settingsToggle.classList.toggle('collapsed', !isCollapsed);
         });
     }
-    
-    // 高级设置折叠
+
+    // 5. 高级设置折叠
     if (Elements.advancedToggle) {
         Elements.advancedToggle.addEventListener('click', function() {
             const isVisible = Elements.advancedContent.style.display === 'block';
@@ -911,24 +923,60 @@ function initSettings() {
             }
         });
     }
-    
-    // 高级设置输入
+
+    // 6. 高级设置输入：恢复值 + 绑定
     if (Elements.keepFps) {
+        Elements.keepFps.checked = AppState.settings.keepFps;
         Elements.keepFps.addEventListener('change', function() {
             AppState.settings.keepFps = Elements.keepFps.checked;
+            saveSettings();
         });
     }
-    
+
     if (Elements.keepAudio) {
+        Elements.keepAudio.checked = AppState.settings.keepAudio;
         Elements.keepAudio.addEventListener('change', function() {
             AppState.settings.keepAudio = Elements.keepAudio.checked;
+            saveSettings();
         });
     }
-    
+
     if (Elements.bitrate) {
+        Elements.bitrate.value = AppState.settings.bitrate;
         Elements.bitrate.addEventListener('change', function() {
             AppState.settings.bitrate = parseInt(Elements.bitrate.value) || 8;
+            saveSettings();
         });
+    }
+}
+
+// 本地存储 key（localStorage 即用户浏览器中的"本地文件"，跨刷新/重开持久保存）
+const SETTINGS_STORAGE_KEY = 'videosr_settings_v1';
+
+// 从本地文件读取已保存的设置，覆盖默认设置（仅合并已存在的字段，兼容后续新增字段）
+function loadSettings() {
+    try {
+        var raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+        if (!raw) return;
+        var saved = JSON.parse(raw);
+        if (saved && typeof saved === 'object') {
+            Object.keys(saved).forEach(function(k) {
+                if (Object.prototype.hasOwnProperty.call(AppState.settings, k)) {
+                    AppState.settings[k] = saved[k];
+                }
+            });
+        }
+    } catch (e) {
+        console.warn('读取本地设置失败:', e);
+    }
+}
+
+// 将当前设置写入本地文件（持久化）
+function saveSettings() {
+    try {
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(AppState.settings));
+    } catch (e) {
+        console.warn('保存本地设置失败:', e);
     }
 }
 
