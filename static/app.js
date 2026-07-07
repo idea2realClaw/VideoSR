@@ -1178,7 +1178,17 @@ function updateProgress(task) {
         Elements.progressFill.style.width = percent + '%';
     }
     if (Elements.progressPercent) {
-        Elements.progressPercent.textContent = percent + '%';
+        // 处理中且已知分块/帧总数时，用 x/total 显示进度（图片=Tiles，视频=帧）
+        // 例如图片: 1/10 = 10%，2/10 = 20% ...
+        var _proc = (task.processedFrames !== undefined && task.processedFrames !== null) ? task.processedFrames : null;
+        var _tot = (task.totalFrames !== undefined && task.totalFrames !== null && task.totalFrames > 0) ? task.totalFrames : null;
+        var _inProcessing = (task.status === 'processing' || task.status === 'preprocessing');
+        if (_inProcessing && _proc !== null && _tot !== null) {
+            var _unit = (task.type === 'image') ? ' Tile' : ' 帧';
+            Elements.progressPercent.textContent = _proc + '/' + _tot + _unit;
+        } else {
+            Elements.progressPercent.textContent = percent + '%';
+        }
     }
     
     if (Elements.progressStatus) {
