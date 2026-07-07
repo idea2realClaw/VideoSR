@@ -68,6 +68,33 @@ MODEL_ID = "mnz1l2exq"
 MODEL_NAME = "real_esrgan_x4plus"
 IMAGE_SIZE = 512
 SCALE = 4
+TILE_OVERLAP = 32  # 输入侧重叠像素（输出侧 = 32*4 = 128）
+
+
+def _tile_positions(dim, tile, ov):
+    """计算分块位置（带重叠，最后一块对齐边缘，无重复）。模块级，供 upsample 与任务初始化共用。"""
+    if dim <= tile:
+        return [0]
+    pos = []
+    step = tile - ov
+    p = 0
+    while p + tile <= dim:
+        pos.append(p)
+        p += step
+    # 最后一块对齐边缘
+    if pos[-1] + tile < dim:
+        last = dim - tile
+        if last not in pos:
+            pos.append(last)
+    # 去重（保序）
+    seen = set()
+    unique = []
+    for p in pos:
+        if p not in seen:
+            seen.add(p)
+            unique.append(p)
+    return unique
+
 
 class NPUSuperResEngine:
     """NPU super-resolution engine - load once, upsample many frames."""
@@ -180,33 +207,9 @@ class NPUSuperResEngine:
 
         tile_size = IMAGE_SIZE       # 512（模型输入）
         out_tile  = tile_size * SCALE  # 2048（模型输出）
-        overlap   = 32               # 重叠像素（输入侧），输出侧 = 32*4 = 128
+        overlap   = TILE_OVERLAP      # 输入侧重叠像素
 
-        # 计算分块位置（带重叠，最后一块对齐右/下边缘，无重复）
-        def _tile_positions(dim, tile, ov):
-            # 单边尺寸小于一块时，只取一块（从 0 开始；crop 时由 PIL 自动补黑边）
-            if dim <= tile:
-                return [0]
-            pos = []
-            step = tile - ov
-            p = 0
-            while p + tile <= dim:
-                pos.append(p)
-                p += step
-            # 最后一块对齐边缘
-            if pos[-1] + tile < dim:
-                last = dim - tile
-                if last not in pos:
-                    pos.append(last)
-            # 去重（保序）
-            seen = set()
-            unique = []
-            for p in pos:
-                if p not in seen:
-                    seen.add(p)
-                    unique.append(p)
-            return unique
-
+        # 计算分块位置（带重叠，最后一块对齐右/下边缘，无重复）——使用模块级 helper
         x_positions = _tile_positions(orig_w, tile_size, overlap)
         y_positions = _tile_positions(orig_h, tile_size, overlap)
 
@@ -472,32 +475,39 @@ def process_image_task(task_id):
                 img = img.convert('RGB')
             
             orig_w, orig_h = img.size
-            update_task(task_id, status='processing', progress=20)
+            update_task(task_id, status='processing')
             
             # 使用 NPU 引擎进行超分
             # 将 PIL Image 转换为 BGR numpy array
             rgb_array = np.array(img)
             bgr_array = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2BGR)
-            
-            update_task(task_id, status='processing', progress=30)
-            
-            # 创建进度回调：每次 Tile 处理完更新任务状态
+
+            # 预计算总 Tile 数（与 upsample 内部 _tile_positions 完全一致），
+            # 提前写入任务状态，使首条进度日志即显示 0/Tiles 而非 0/?
+            total_tiles = (len(_tile_positions(orig_w, IMAGE_SIZE, TILE_OVERLAP)) *
+                           len(_tile_positions(orig_h, IMAGE_SIZE, TILE_OVERLAP)))
+            update_task(task_id, status='processing', progress=0,
+                        processedFrames=0, totalFrames=total_tiles)
+
+            # 创建进度回调：每次 Tile 处理完，按 已处理/总 计算百分比
             def _on_tile(processed, total):
-                update_task(task_id, processedFrames=processed, totalFrames=total)
-            
-            # 设置总 tile 数
-            update_task(task_id, processedFrames=0, totalFrames=0)
-            
-            # NPU 超分
-            sr_bgr = npu_engine.upsample(bgr_array, tile_progress_callback=_on_tile)
-            
-            update_task(task_id, status='processing', progress=80)
-            
+                prog = int(round(processed / total * 100)) if total > 0 else 0
+                update_task(task_id, processedFrames=processed,
+                            totalFrames=total, progress=prog)
+
+            # NPU 超分（带 tile 进度回调）。CPU 模拟模式为单次 resize，无分步回调
+            if npu_engine.npu_available:
+                sr_bgr = npu_engine.upsample(bgr_array, tile_progress_callback=_on_tile)
+            else:
+                sr_bgr = npu_engine.upsample(bgr_array)
+                update_task(task_id, status='processing', progress=100,
+                            processedFrames=1, totalFrames=1)
+
             # BGR -> RGB -> PIL
             sr_rgb = cv2.cvtColor(sr_bgr, cv2.COLOR_BGR2RGB)
             sr_img = Image.fromarray(sr_rgb)
-            
-            update_task(task_id, status='postprocessing', progress=90)
+
+            update_task(task_id, status='postprocessing')
             
             # 保存输出文件（强制 JPG 格式，文件名：原图名称_SRx4.jpg）
             fmt = 'jpg'

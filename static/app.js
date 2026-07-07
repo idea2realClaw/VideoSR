@@ -1077,11 +1077,14 @@ function startProgressPolling() {
             // 仅在状态或进度真正变化时才打印，避免相同值反复刷屏
             if (AppState._lastLogStatus !== task.status || AppState._lastLogProgress !== task.progress) {
                 var pf = '';
+                // 用 undefined/null 判断，避免把合法的 0 当未知（?）
+                var _pf = (task.processedFrames !== undefined && task.processedFrames !== null) ? task.processedFrames : 0;
+                var _tf = (task.totalFrames !== undefined && task.totalFrames !== null) ? task.totalFrames : '?';
                 if (task.processedFrames !== undefined) {
                     if (task.type === 'image') {
-                        pf = 'Tile ' + (task.processedFrames || 0) + '/' + (task.totalFrames || '?') + ', ';
+                        pf = 'Tile ' + _pf + '/' + _tf + ', ';
                     } else {
-                        pf = task.processedFrames + '/' + (task.totalFrames || '?') + ' 帧, ';
+                        pf = _pf + '/' + _tf + ' 帧, ';
                     }
                 }
                 Logger.info(`进度更新: ${pf}${task.status}, ${task.progress}%`);
