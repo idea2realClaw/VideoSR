@@ -151,10 +151,11 @@ class NPUSuperResEngine:
             print(f"[ERR] 模型下载失败: {e}")
             return None
     
-    def upsample(self, frame_bgr):
+    def upsample(self, frame_bgr, tile_progress_callback=None):
         """
         使用 NPU 进行超分（支持任意尺寸，自动分块处理，带重叠融合）
         frame_bgr: BGR numpy array (H, W, 3)
+        tile_progress_callback: 可选回调函数(processed, total)，每次处理完一个 Tile 后调用
         returns: BGR numpy array at 4x resolution
         """
         if not self.npu_available or not self.model:
@@ -209,6 +210,9 @@ class NPUSuperResEngine:
         x_positions = _tile_positions(orig_w, tile_size, overlap)
         y_positions = _tile_positions(orig_h, tile_size, overlap)
 
+        total_tiles = len(x_positions) * len(y_positions)
+        tile_count = 0
+
         for y in y_positions:
             for x in x_positions:
                 # 取 512x512 块（边缘块左移/上移取完整块；小于512时从0开始，PIL补黑边）
@@ -218,6 +222,10 @@ class NPUSuperResEngine:
 
                 # NPU 推理（输出 2048x2048）
                 tile_sr = self._infer_tile(tile, PerfProfile)
+
+                tile_count += 1
+                if tile_progress_callback:
+                    tile_progress_callback(tile_count, total_tiles)
 
                 # 计算输出图上对应的位置（4x）
                 out_x = x * SCALE
@@ -473,8 +481,15 @@ def process_image_task(task_id):
             
             update_task(task_id, status='processing', progress=30)
             
+            # 创建进度回调：每次 Tile 处理完更新任务状态
+            def _on_tile(processed, total):
+                update_task(task_id, processedFrames=processed, totalFrames=total)
+            
+            # 设置总 tile 数
+            update_task(task_id, processedFrames=0, totalFrames=0)
+            
             # NPU 超分
-            sr_bgr = npu_engine.upsample(bgr_array)
+            sr_bgr = npu_engine.upsample(bgr_array, tile_progress_callback=_on_tile)
             
             update_task(task_id, status='processing', progress=80)
             

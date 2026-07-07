@@ -1076,7 +1076,14 @@ function startProgressPolling() {
             const task = result.task;
             // 仅在状态或进度真正变化时才打印，避免相同值反复刷屏
             if (AppState._lastLogStatus !== task.status || AppState._lastLogProgress !== task.progress) {
-                var pf = task.processedFrames !== undefined ? task.processedFrames + '/' + (task.totalFrames || '?') + ' 帧, ' : '';
+                var pf = '';
+                if (task.processedFrames !== undefined) {
+                    if (task.type === 'image') {
+                        pf = 'Tile ' + (task.processedFrames || 0) + '/' + (task.totalFrames || '?') + ', ';
+                    } else {
+                        pf = task.processedFrames + '/' + (task.totalFrames || '?') + ' 帧, ';
+                    }
+                }
                 Logger.info(`进度更新: ${pf}${task.status}, ${task.progress}%`);
                 AppState._lastLogStatus = task.status;
                 AppState._lastLogProgress = task.progress;
@@ -1130,12 +1137,13 @@ function updateProgress(task) {
         Elements.progressTitle.textContent = getProgressTitle(task.status);
     }
     
-    // 视频模式显示帧数，图片模式不显示
+    // 显示 Tile/帧进度
     if (Elements.framesDetail) {
-        if (AppState.mode === 'video' && task.processedFrames !== undefined && task.totalFrames !== undefined) {
+        if (task.processedFrames !== undefined && task.totalFrames !== undefined) {
             Elements.framesDetail.style.display = 'block';
             if (Elements.progressProcessed) {
-                Elements.progressProcessed.textContent = task.processedFrames + ' / ' + task.totalFrames + ' 帧';
+                var unit = (task.type === 'image') ? ' Tile' : ' 帧';
+                Elements.progressProcessed.textContent = task.processedFrames + ' / ' + task.totalFrames + unit;
             }
         } else {
             Elements.framesDetail.style.display = 'none';
