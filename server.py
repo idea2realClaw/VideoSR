@@ -201,9 +201,10 @@ class NPUSuperResEngine:
         # 输出画布（4x 尺寸）
         out_w = orig_w * SCALE
         out_h = orig_h * SCALE
-        # 用 float64 累加避免精度问题，最后转 uint8
-        result_accum = np.zeros((out_h, out_w, 3), dtype=np.float64)
-        result_weight = np.zeros((out_h, out_w, 3), dtype=np.float64)
+        # 用 float32 累加即可：输入是 8-bit(0-255)，权重为 0-1 线性融合，
+        # float32 约 7 位有效数字，远超 8-bit 量化噪声，质量无差；内存减半
+        result_accum = np.zeros((out_h, out_w, 3), dtype=np.float32)
+        result_weight = np.zeros((out_h, out_w, 3), dtype=np.float32)
 
         tile_size = IMAGE_SIZE       # 512（模型输入）
         out_tile  = tile_size * SCALE  # 2048（模型输出）
@@ -251,10 +252,10 @@ class NPUSuperResEngine:
                         y_blend[:ov_out] = np.linspace(0, 1, ov_out)
                     if y_start + tile_size < orig_h:
                         y_blend[-ov_out:] = np.linspace(1, 0, ov_out)
-                weight_2d = (y_blend[:, None] * x_blend[None, :]).astype(np.float64)
+                weight_2d = (y_blend[:, None] * x_blend[None, :]).astype(np.float32)
                 weight_3d = np.repeat(weight_2d[:, :, None], 3, axis=2)
 
-                sr_np = np.array(tile_sr).astype(np.float64) / 255.0
+                sr_np = np.array(tile_sr).astype(np.float32) / 255.0
 
                 # 累加到结果画布
                 ry_end = min(out_y + h_out, out_h)
