@@ -722,6 +722,47 @@ body {
     box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 
+/* 原图最大尺寸输入 */
+.max-size-inputs {
+    display: flex;
+    gap: 16px;
+}
+
+.max-size-field {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.max-size-field label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.max-size-field .setting-input {
+    width: 80px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.max-size-field .setting-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.max-size-field span {
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+}
+
 /* 模型选择器 */
 .model-selector {
     display: flex;

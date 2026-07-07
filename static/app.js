@@ -180,13 +180,13 @@ const AppState = {
     completedTaskId: null,
     settings: {
         scale: 4,
-        model: 'real_esrgan',
-        denoise: 2,
-        format: 'mp4', // for video: mp4/webm/mkv, for image: png/jpg/webp
+        format: 'mp4',
         keepFps: true,
         keepAudio: true,
         bitrate: 8,
-        useNpu: true
+        useNpu: true,
+        maxWidth: 1024,
+        maxHeight: 1024
     },
     isProcessing: false,
     progressInterval: null,
@@ -239,16 +239,14 @@ function initElements() {
     Elements.settingsPanel = document.getElementById('settingsPanel');
     Elements.settingsToggle = document.getElementById('settingsToggle');
     Elements.settingsContent = document.getElementById('settingsContent');
-    Elements.denoiseLevel = document.getElementById('denoiseLevel');
-    Elements.denoiseValue = document.getElementById('denoiseValue');
-    Elements.imageFormatGroup = document.getElementById('imageFormatGroup');
-    Elements.videoFormatGroup = document.getElementById('videoFormatGroup');
     Elements.videoAdvancedSettings = document.getElementById('videoAdvancedSettings');
     Elements.advancedToggle = document.getElementById('advancedToggle');
     Elements.advancedContent = document.getElementById('advancedContent');
     Elements.keepFps = document.getElementById('keepFps');
     Elements.keepAudio = document.getElementById('keepAudio');
     Elements.bitrate = document.getElementById('bitrate');
+    Elements.maxWidthInput = document.getElementById('maxWidthInput');
+    Elements.maxHeightInput = document.getElementById('maxHeightInput');
     
     // 操作区域
     Elements.actionSection = document.getElementById('actionSection');
@@ -436,9 +434,6 @@ function switchMode(mode) {
         AppState.settings.format = 'jpg';
         Logger.input('模式: 图片超分, 格式: JPG');
     }
-    
-    // 更新格式选择显示
-    updateFormatDisplay();
     
     // 重置上传状态
     resetToUpload();
@@ -707,10 +702,11 @@ function showPreview(file, uploadResult) {
             // 记录原图尺寸（供「开始超分」时判断是否跳过）
             AppState.originalImageWidth = img.width;
             AppState.originalImageHeight = img.height;
-            // 信息区提示：两条边都超过 1024 才算尺寸足够大（仅提示，不直接拦截）
-            var tooLarge = (img.width > 1024 && img.height > 1024);
+            var maxW = AppState.settings.maxWidth || 1024;
+            var maxH = AppState.settings.maxHeight || 1024;
+            var tooLarge = (img.width > maxW && img.height > maxH);
             if (tooLarge) {
-                infoHtml += '<div class="image-too-large-warn">⚠️ 宽高均超过 1024，已足够清晰，可能不需要超分</div>';
+                infoHtml += '<div class="image-too-large-warn">⚠️ 宽高均超过 ' + maxW + '×' + maxH + '，已足够清晰，可能不需要超分</div>';
             }
             if (origInfo) origInfo.innerHTML = infoHtml;
             // 设置容器高度（按图片宽高比）
@@ -740,9 +736,6 @@ function showPreview(file, uploadResult) {
     if (Elements.actionPanel) {
         Elements.actionPanel.style.display = 'flex';
     }
-    
-    // 更新格式选择显示
-    updateFormatDisplay();
     
     // 存储上传后的文件路径
     if (uploadResult && uploadResult.filePath) {
@@ -880,38 +873,19 @@ function initSettings() {
         });
     });
     
-    // 模型选择
-    document.querySelectorAll('.model-option').forEach(function(option) {
-        option.addEventListener('click', function() {
-            document.querySelectorAll('.model-option').forEach(function(o) {
-                o.classList.remove('active');
-            });
-            option.classList.add('active');
-            AppState.settings.model = option.dataset.model;
-        });
-    });
-    
-    // 降噪级别
-    if (Elements.denoiseLevel) {
-        Elements.denoiseLevel.addEventListener('input', function() {
-            const values = ['无', '低', '中', '高'];
-            AppState.settings.denoise = parseInt(Elements.denoiseLevel.value);
-            if (Elements.denoiseValue) {
-                Elements.denoiseValue.textContent = values[AppState.settings.denoise];
-            }
+    // 原图最大尺寸输入
+    if (Elements.maxWidthInput) {
+        Elements.maxWidthInput.addEventListener('input', function() {
+            var val = parseInt(Elements.maxWidthInput.value) || 0;
+            AppState.settings.maxWidth = val;
         });
     }
-    
-    // 输出格式
-    document.querySelectorAll('.format-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            document.querySelectorAll('.format-btn').forEach(function(b) {
-                b.classList.remove('active');
-            });
-            btn.classList.add('active');
-            AppState.settings.format = btn.dataset.format;
+    if (Elements.maxHeightInput) {
+        Elements.maxHeightInput.addEventListener('input', function() {
+            var val = parseInt(Elements.maxHeightInput.value) || 0;
+            AppState.settings.maxHeight = val;
         });
-    });
+    }
     
     // 设置面板折叠（默认折叠）
     if (Elements.settingsToggle) {
@@ -958,20 +932,6 @@ function initSettings() {
     }
 }
 
-function updateFormatDisplay() {
-    if (!Elements.imageFormatGroup || !Elements.videoFormatGroup) return;
-    
-    if (AppState.mode === 'image') {
-        Elements.imageFormatGroup.style.display = 'block';
-        Elements.videoFormatGroup.style.display = 'none';
-        if (Elements.videoAdvancedSettings) Elements.videoAdvancedSettings.style.display = 'none';
-    } else {
-        Elements.imageFormatGroup.style.display = 'none';
-        Elements.videoFormatGroup.style.display = 'block';
-        if (Elements.videoAdvancedSettings) Elements.videoAdvancedSettings.style.display = 'block';
-    }
-}
-
 // ==========================================
 // 操作功能
 // ==========================================
@@ -1015,7 +975,7 @@ function initActions() {
 async function startProcessing() {
     Logger.info(`开始处理: ${AppState.mode === 'video' ? '视频' : '图片'}超分`);
     Logger.input(`输入文件: ${AppState.uploadedFilePath}`);
-    Logger.input(`处理设置: 放大${AppState.settings.scale}x, 模型=${AppState.settings.model}, 降噪=${AppState.settings.denoise}, NPU=${AppState.settings.useNpu ? '开启' : '关闭'}`);
+    Logger.input(`处理设置: 放大${AppState.settings.scale}x, NPU=${AppState.settings.useNpu ? '开启' : '关闭'}, 原图最大=${AppState.settings.maxWidth||1024}x${AppState.settings.maxHeight||1024}`);
     
     if (!AppState.uploadedFilePath) {
         Logger.error('未上传文件');
@@ -1023,12 +983,14 @@ async function startProcessing() {
         return;
     }
     
-    // 图片模式：宽高均超过 1024×1024 时，提示已足够清晰，不执行超分
+    var _maxW = AppState.settings.maxWidth || 1024;
+    var _maxH = AppState.settings.maxHeight || 1024;
+    // 图片模式：宽高均超过设置的最大尺寸时，提示已足够清晰，不执行超分
     if (AppState.mode === 'image'
-        && AppState.originalImageWidth > 1024
-        && AppState.originalImageHeight > 1024) {
-        Logger.warn('原图宽高均超过 1024，跳过超分: ' + AppState.originalImageWidth + 'x' + AppState.originalImageHeight);
-        showToast('warning', '图像尺寸 ' + AppState.originalImageWidth + ' × ' + AppState.originalImageHeight + ' 宽高均超过 1024×1024，已足够清晰，可能不需要超分');
+        && AppState.originalImageWidth > _maxW
+        && AppState.originalImageHeight > _maxH) {
+        Logger.warn('原图宽高均超过 ' + _maxW + 'x' + _maxH + '，跳过超分: ' + AppState.originalImageWidth + 'x' + AppState.originalImageHeight);
+        showToast('warning', '图像尺寸 ' + AppState.originalImageWidth + ' × ' + AppState.originalImageHeight + ' 宽高均超过 ' + _maxW + '×' + _maxH + '，已足够清晰，可能不需要超分');
         return;
     }
     

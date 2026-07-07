@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VideoSR - AI视频/图片超分辨率增强工具</title>
-    <link rel="stylesheet" href="static/style.css?v=2026070625">
+    <link rel="stylesheet" href="static/style.css?v=2026070726">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
 </head>
 <body>
@@ -272,61 +272,23 @@
                                     </div>
                                 </div>
 
-                                <!-- 超分算法 -->
+                                <!-- 原图最大尺寸 -->
                                 <div class="setting-group">
                                     <label class="setting-label">
-                                        超分算法
-                                        <span class="setting-hint">选择AI超分辨率算法模型</span>
+                                        原图最大尺寸
+                                        <span class="setting-hint">超过此尺寸的图片将提示跳过超分</span>
                                     </label>
-                                    <div class="model-selector">
-                                        <div class="model-option active" data-model="real_esrgan">
-                                            <div class="model-radio"></div>
-                                            <div class="model-info">
-                                                <h5>Real-ESRGAN</h5>
-                                                <p>通用图像/视频超分，效果均衡</p>
-                                            </div>
+                                    <div class="max-size-inputs">
+                                        <div class="max-size-field">
+                                            <label>宽度</label>
+                                            <input type="number" class="setting-input" id="maxWidthInput" value="1024" min="0" max="99999">
+                                            <span>px</span>
                                         </div>
-                                    </div>
-                                </div>
-
-                                <!-- 降噪级别 -->
-                                <div class="setting-group">
-                                    <label class="setting-label">
-                                        降噪级别
-                                        <span class="setting-value" id="denoiseValue">中</span>
-                                    </label>
-                                    <input type="range" class="setting-range" id="denoiseLevel" min="0" max="3" value="2" step="1">
-                                    <div class="range-labels">
-                                        <span>无</span>
-                                        <span>低</span>
-                                        <span>中</span>
-                                        <span>高</span>
-                                    </div>
-                                </div>
-
-                                <!-- 输出格式（图片模式） -->
-                                <div class="setting-group" id="imageFormatGroup" style="display: none;">
-                                    <label class="setting-label">
-                                        输出格式
-                                        <span class="setting-hint">选择输出图片格式</span>
-                                    </label>
-                                    <div class="format-selector">
-                                        <button class="format-btn" data-format="png">PNG</button>
-                                        <button class="format-btn active" data-format="jpg">JPG</button>
-                                        <button class="format-btn" data-format="webp">WebP</button>
-                                    </div>
-                                </div>
-
-                                <!-- 输出格式（视频模式） -->
-                                <div class="setting-group" id="videoFormatGroup">
-                                    <label class="setting-label">
-                                        输出格式
-                                        <span class="setting-hint">选择输出视频的编码格式</span>
-                                    </label>
-                                    <div class="format-selector">
-                                        <button class="format-btn active" data-format="mp4">MP4</button>
-                                        <button class="format-btn" data-format="webm">WebM</button>
-                                        <button class="format-btn" data-format="mkv">MKV</button>
+                                        <div class="max-size-field">
+                                            <label>高度</label>
+                                            <input type="number" class="setting-input" id="maxHeightInput" value="1024" min="0" max="99999">
+                                            <span>px</span>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -450,6 +412,6 @@
         <p class="loading-text" id="loadingText">加载中...</p>
     </div>
 
-    <script src="static/app.js?v=2026070625"></script>
+    <script src="static/app.js?v=2026070726"></script>
 </body>
 </html>
